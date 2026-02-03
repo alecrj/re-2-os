@@ -21,14 +21,13 @@
 ## Active Subtasks
 | ID | Title | Owner | Status | Blocked By |
 |----|-------|-------|--------|------------|
-| 000 | Create project structure | Director | 🔄 Active | - |
-| 001 | Test hook works | verifier | ⏳ Pending | 000 |
-| 002 | Test skills work | verifier | ⏳ Pending | 000 |
+| 001 | Test hook works | verifier | ⏳ Pending | - |
+| 002 | Test skills work | verifier | ⏳ Pending | - |
 
 ## Completed Subtasks (Current Phase)
 | ID | Title | Completed | Validated |
 |----|-------|-----------|-----------|
-| (none yet) | | | |
+| 000 | Create project structure | 2026-02-03 | ✅ 50 files created |
 
 ## Blocked Items
 | Item | Reason | Since | Action Needed |
