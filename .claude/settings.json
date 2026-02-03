@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/block-doc-sprawl.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '📋 ResellerOS Session Started. Run /phase-status first to see current state.'"
+          }
+        ]
+      }
+    ]
+  }
+}
