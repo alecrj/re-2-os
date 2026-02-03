@@ -23,18 +23,21 @@
 | Tests pass | npm run test | ⏳ After setup |
 | Types check | npm run typecheck | ⏳ After setup |
 
-## External APIs (To Validate in Discovery)
+## External APIs (Validated in Phase 1)
 | API | Status | Notes |
 |-----|--------|-------|
-| eBay Inventory | ❓ Unknown | Research in Phase 1 |
-| eBay Fulfillment | ❓ Unknown | Research in Phase 1 |
-| eBay Finances | ❓ Unknown | Research in Phase 1 |
-| Poshmark | ❓ Unknown | Likely no API |
-| Mercari | ❓ Unknown | Likely no API |
-| Depop | ❓ Unknown | Partner API? |
+| eBay Inventory | ✅ Available | 2M calls/day, full listing management |
+| eBay Fulfillment | ✅ Available | 100K-2.5M calls/day, order management |
+| eBay Finances | ✅ Available | Fee tracking, profit calculation |
+| eBay Notification | ✅ Available | 17 webhook topics for real-time sync |
+| Poshmark | ⚠️ No API | ToS prohibits automation; use cross-list tools |
+| Mercari | ⚠️ Limited | Official cross-list import only |
+| Depop | ⚠️ No API | ToS allows cross-listing platforms |
 
 ## Known Constraints
 - Context window: ~200k tokens
 - Session persistence: Via repo only
 - Parallelism: Subagents or worktrees
-- Platform rate limits: TBD in Discovery
+- **eBay**: 250 revisions/listing/day limit
+- **eBay**: API-created listings locked to API management
+- **Poshmark/Mercari**: Must use assisted mode, not direct automation
