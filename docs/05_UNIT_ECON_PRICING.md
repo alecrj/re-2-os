@@ -167,7 +167,35 @@
 
 ---
 
+## FINAL PRICING DECISIONS (Phase 2)
+
+### Free Tier: YES
+- **Listings/month**: 3
+- **Platforms**: eBay only
+- **AI features**: Basic
+- **Background removals**: 0
+- **Autopilot**: None
+- **Purpose**: Trial conversion (not forever-free)
+
+### Final Tier Structure
+
+| Tier | Price | Listings/mo | BG Removals | Autopilot Rules |
+|------|-------|-------------|-------------|-----------------|
+| Free | $0 | 3 | 0 | 0 |
+| Starter | $19 | 50 | 10 | 1 |
+| Pro | $39 | 250 | 100 | 5 |
+| Power | $79 | 1,000 | 500 | Unlimited |
+| Business | $149 | 3,000 | 1,500 | Unlimited |
+
+### Annual Discount: 17% (2 months free)
+
+### Overage Policy
+- Soft limits with upgrade prompts (no hard fees)
+- BG removal add-on packs: $5/50 or $15/200
+
+---
+
 ## Status
-- **Current**: Phase 1 Discovery Complete
+- **Current**: COMPLETE (Phase 2 Planning)
 - **Updated**: 2026-02-03
-- **Researched By**: planner (SUBTASK-105)
+- **Owner**: planner

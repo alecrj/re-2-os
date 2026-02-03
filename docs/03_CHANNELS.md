@@ -719,12 +719,280 @@ These platforms have:
 
 ---
 
+---
+
+## Channel Strategy
+
+> **Decision Owner**: integrations-lead
+> **Decided**: 2026-02-03 (SUBTASK-204)
+> **ADR**: docs/decisions/ADR-0001-channel-strategy.md
+
+### Strategic Principles
+
+1. **Safety First**: User account safety is paramount. We will not implement features that create meaningful ban risk.
+2. **API-Native When Possible**: Official APIs are the only truly safe integration path.
+3. **Honest About Limitations**: We will clearly communicate what we can and cannot automate per channel.
+4. **Assisted Over Sketchy**: Where automation is risky, we provide assisted workflows, not hidden automation.
+
+---
+
+### Integration Mode Definitions
+
+| Mode | Definition | User Experience | Risk Level |
+|------|------------|-----------------|------------|
+| **Native** | Direct API integration with official marketplace APIs | Fully automated listing, orders, repricing | SAFE |
+| **Assisted** | Integration via established cross-listing partners OR manual-assist workflows | Semi-automated, may require user action | LOW-MEDIUM |
+| **Manual** | No automation; ResellerOS tracks data only | User lists manually, we track inventory/sales | SAFE |
+
+---
+
+### Channel Decisions (MVP vs Future)
+
+#### MVP Channels (Phase 1 Launch)
+
+| Channel | Mode | Rationale |
+|---------|------|-----------|
+| **eBay** | Native | Comprehensive API, 2M calls/day, official support, lowest risk, largest resale market |
+| **Poshmark** | Assisted | No API, but high volume channel for fashion. Use cross-listing partner integration OR manual tracking with assisted workflows |
+| **Mercari** | Assisted | Has official cross-list import feature. Use Mercari's import OR cross-listing partner integration |
+
+**Why These Three?**
+- eBay: Largest market, best API, safest. Must-have.
+- Poshmark: #2 fashion marketplace. 80M users. Too important to skip despite API limitations.
+- Mercari: Growing fast, official cross-listing support makes it lower risk than Poshmark.
+
+#### Phase 2 Expansion
+
+| Channel | Mode | Rationale |
+|---------|------|-----------|
+| **Depop** | Assisted | ToS explicitly allows cross-listing. Add after core channels stable. |
+| **Facebook Marketplace** | Manual | No reliable API, automation heavily restricted. Track-only. |
+
+#### Phase 3 / Future Consideration
+
+| Channel | Mode | Rationale |
+|---------|------|-----------|
+| **Etsy** | Native | Has official API. Add when we expand beyond fashion/general resale. |
+| **Grailed** | Assisted | Niche (high-end menswear). Evaluate demand. |
+| **Whatnot** | TBD | Live selling platform. Different model. Evaluate. |
+| **International** | TBD | eBay UK/DE/AU via same API. Evaluate demand. |
+
+---
+
+### Channel-Specific Strategies
+
+#### eBay (Native - MVP)
+
+**Integration Approach**:
+- Full Inventory API integration for listing creation/management
+- Fulfillment API for order sync and shipping updates
+- Finances API for real fee tracking (profit truth)
+- Notification API webhooks for real-time order/listing events
+- Consider eBay Compatible Application certification for higher rate limits
+
+**Automation Capabilities**:
+- Create listings from ResellerOS
+- Sync inventory quantities
+- Reprice within guardrails (respect 250 revisions/day limit)
+- Auto-pull orders
+- Track actual fees for profit calculation
+
+**Failure Modes and Mitigations**:
+| Risk | Mitigation |
+|------|------------|
+| 250 revision/day limit hit | Queue updates for next day, warn user |
+| Token expiration | Implement refresh token flow, alert user if refresh fails |
+| Rate limit exceeded | Exponential backoff, queue requests |
+| Listing compliance violation | Use Taxonomy/Metadata APIs to validate before publish |
+
+---
+
+#### Poshmark (Assisted - MVP)
+
+**Why Assisted, Not Native**:
+- No official API exists
+- ToS explicitly prohibits automation
+- However: Cross-listing tools are widely used without bans
+- Risk is real but manageable with conservative approach
+
+**Integration Options** (in order of preference):
+
+1. **Cross-Listing Partner Integration**
+   - Partner with Vendoo, List Perfectly, or similar via their API
+   - User connects their Poshmark via partner tool
+   - We push listings to partner, they handle Poshmark
+   - Pros: Liability on partner, established relationship with Poshmark
+   - Cons: Dependency, cost pass-through, UX complexity
+
+2. **Manual-Assist Mode**
+   - User lists on Poshmark manually
+   - ResellerOS provides listing template (copy-paste title, description, price)
+   - User reports sale, we update inventory
+   - Pros: Zero risk, simple
+   - Cons: Manual effort, delays in sync
+
+**Recommendation**: Start with Manual-Assist for MVP, explore partner integration for v1.1.
+
+**What We Will NOT Do**:
+- Direct browser automation (bot-like behavior)
+- Auto-sharing, auto-following, auto-liking
+- Any automation that could trigger "share jail" or worse
+
+**User Communication**:
+- Clear messaging: "Poshmark does not provide an API. We help you list efficiently, but you complete the final steps."
+- Provide one-click copy for all listing fields
+- Track Poshmark inventory and sales manually entered by user
+
+---
+
+#### Mercari (Assisted - MVP)
+
+**Why Assisted, Not Native**:
+- Mercari has no public API for sellers
+- However: Has official cross-listing import feature
+- API-integrated cross-listing tools (Vendoo, etc.) work reliably
+
+**Integration Options** (in order of preference):
+
+1. **Mercari Official Import**
+   - Mercari allows importing from eBay, Poshmark, Depop
+   - ResellerOS lists to eBay first, user imports to Mercari
+   - Pros: Official feature, zero risk
+   - Cons: Manual step, items import as drafts
+
+2. **Cross-Listing Partner Integration**
+   - Same as Poshmark - partner with OAuth-integrated tools
+   - Pros: More automated
+   - Cons: Dependency, cost
+
+3. **Manual-Assist Mode**
+   - Same as Poshmark - templates and manual entry
+   - Pros: Zero risk
+   - Cons: Manual effort
+
+**Recommendation**:
+- MVP: Manual-Assist + guidance to use Mercari's official import from eBay
+- v1.1: Evaluate cross-listing partner integration
+
+**What We Will NOT Do**:
+- Browser extensions that mimic clicks
+- Any scraping or data extraction
+
+---
+
+#### Depop (Assisted - Phase 2)
+
+**Why Phase 2, Not MVP**:
+- Smaller market than eBay/Poshmark/Mercari
+- ToS explicitly allows cross-listing (lower risk than Poshmark)
+- Can add after core experience is solid
+
+**Integration Approach**:
+- Cross-listing partner integration OR manual-assist
+- Same patterns as Poshmark/Mercari
+
+---
+
+### Risk Mitigation Framework
+
+#### User Protections
+
+1. **Clear Disclaimers**
+   - Per-channel explanation of what is automated vs manual
+   - Risk disclosure for assisted channels
+   - No false promises about capabilities
+
+2. **Conservative Defaults**
+   - Human-like delays built into any automation
+   - Rate limiting well below platform detection thresholds
+   - No aggressive features (mass following, etc.)
+
+3. **Audit Trail**
+   - Log all actions taken on user's behalf
+   - User can see what happened and when
+   - Easy to explain to platform support if questioned
+
+4. **Account Isolation**
+   - ResellerOS actions should not look like coordinated bot network
+   - Randomization in timing and patterns
+   - Each user operates independently
+
+#### Platform Monitoring
+
+1. **ToS Tracking**
+   - Monitor platform ToS changes quarterly
+   - Alert engineering if changes affect our approach
+   - Update user documentation promptly
+
+2. **Incident Response**
+   - If user reports suspension, investigate immediately
+   - Document patterns, adjust features if needed
+   - Never hide risk from users
+
+---
+
+### Rollout Plan
+
+#### Phase 1: MVP Launch
+- **eBay**: Full native integration
+- **Poshmark**: Manual-assist mode (copy-paste templates, inventory tracking)
+- **Mercari**: Manual-assist mode + eBay import guidance
+
+**Success Criteria**:
+- Users can list to eBay from ResellerOS
+- Users can track Poshmark/Mercari inventory in ResellerOS
+- Zero user account suspensions attributable to ResellerOS
+
+#### Phase 2: Assisted Upgrade (Post-MVP)
+- **Poshmark/Mercari**: Evaluate cross-listing partner integration
+- **Depop**: Add manual-assist mode
+
+**Go/No-Go Criteria**:
+- MVP stable for 30+ days
+- User demand validated
+- Partner integration terms acceptable
+
+#### Phase 3: Expansion
+- Additional channels based on user demand
+- International eBay sites
+- Potential Etsy native integration
+
+---
+
+### Competitive Positioning
+
+| Competitor | Channels | Our Advantage |
+|------------|----------|---------------|
+| Vendoo | 11 | We're honest about risk; they push ToS limits |
+| List Perfectly | 11 | We have mobile-first; they open browser tabs |
+| Crosslist | 11 | We auto-delist; they don't |
+| Flyp | 6 | We have more channels (at MVP) |
+| Nifty | 5 | We have more channels (at MVP) |
+
+**Positioning Statement**:
+"ResellerOS gives you eBay native automation and safe assisted workflows for Poshmark and Mercari. We will never risk your accounts with sketchy automation."
+
+---
+
+### Open Questions for Architecture Phase
+
+1. **Cross-listing Partner API**: Do we build partner integration in Phase 1 or Phase 2?
+2. **Manual Entry UX**: How do we make manual-assist mode feel fast and not tedious?
+3. **Inventory Sync**: How do we handle inventory across channels when some are manual?
+4. **Sale Detection**: For manual channels, do we poll eBay for sales and prompt user to check others?
+
+---
+
 ## Status
-- **Current**: eBay API + ToS Constraints research complete (Phase 1)
-- **Updated**: 2026-02-03 (SUBTASK-104: ToS Constraints completed)
+- **Current**: Channel Strategy complete (Phase 2)
+- **Updated**: 2026-02-03 (SUBTASK-204: Channel Strategy completed)
 - **Completed Research**:
   - eBay: Native API (11 APIs documented) + ToS constraints
   - Poshmark: ToS constraints + enforcement reality
   - Mercari: ToS constraints + official cross-listing support
   - Depop: ToS constraints + cross-listing allowance
-- **Next Update**: Phase 2 (Planning) - Integration architecture decisions
+- **Completed Decisions**:
+  - MVP channels: eBay (native), Poshmark (assisted), Mercari (assisted)
+  - Phase 2 expansion: Depop (assisted), Facebook (manual)
+  - Risk mitigation framework defined
+- **Next Update**: Phase 3 (Architecture) - Technical integration design
