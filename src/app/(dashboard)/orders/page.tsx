@@ -67,13 +67,10 @@ export default function OrdersPage() {
 
   // Sync from eBay mutation
   const syncMutation = trpc.orders.syncFromEbay.useMutation({
-    onSuccess: (result) => {
+    onSuccess: () => {
       utils.orders.list.invalidate();
       utils.orders.getStats.invalidate();
-      // Show success message (you could use a toast here)
-      console.log(
-        `Synced ${result.synced} orders (${result.created} new, ${result.updated} updated)`
-      );
+      // TODO: Show success toast with sync results
     },
   });
 

@@ -410,9 +410,6 @@ export const ordersRouter = createTRPCRouter({
                   salePrice: ebayOrder.salePrice,
                 },
               });
-              console.log(
-                `[orders.syncFromEbay] Triggered delist-on-sale for item ${itemId}`
-              );
             } catch (sendError) {
               // Log but don't fail - the order was created successfully
               console.error(
@@ -632,9 +629,6 @@ export const ordersRouter = createTRPCRouter({
             salePrice: input.salePrice,
           },
         });
-        console.log(
-          `[orders.recordSale] Triggered delist-on-sale for item ${input.itemId}`
-        );
       } catch (sendError) {
         // Log but don't fail - the order was created successfully
         // The delist-on-sale function handles failures gracefully

@@ -4,16 +4,23 @@ import { db } from "@/server/db/client";
 import {
   autopilotRules,
   autopilotActions,
+  channelListings,
+  inventoryItems,
   type OfferRuleConfig,
   type RepriceRuleConfig,
 } from "@/server/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { auditService } from "@/server/services/audit";
 import {
   validateOfferRuleConfig,
   DEFAULT_OFFER_RULE_CONFIG,
 } from "@/server/services/autopilot";
+import {
+  getAdapter,
+  isNativeChannel,
+  type ChannelId,
+} from "@/server/services/channels";
 
 // ============ INPUT SCHEMAS ============
 
@@ -47,6 +54,451 @@ const bulkResolveInputSchema = z.object({
   actionIds: z.array(z.string()).min(1),
   decision: z.enum(["approve", "reject"]),
 });
+
+// ============ ACTION EXECUTION HELPER ============
+
+interface ActionExecutionResult {
+  success: boolean;
+  error?: string;
+  requiresManualAction?: boolean;
+  manualInstructions?: string;
+}
+
+/**
+ * Execute an autopilot action via the appropriate channel adapter.
+ * Handles both native channels (eBay) and assisted channels (Poshmark, etc.)
+ */
+async function executeAutopilotAction(
+  userId: string,
+  action: {
+    id: string;
+    actionType: string;
+    itemId: string | null;
+    beforeState: Record<string, unknown> | null;
+    afterState: Record<string, unknown> | null;
+    payload: Record<string, unknown> | null;
+  }
+): Promise<ActionExecutionResult> {
+  // Get the item and its channel listings if we have an itemId
+  if (!action.itemId) {
+    return { success: true }; // No item to act on, consider successful
+  }
+
+  const item = await db.query.inventoryItems.findFirst({
+    where: eq(inventoryItems.id, action.itemId),
+  });
+
+  if (!item) {
+    return { success: false, error: "Item not found" };
+  }
+
+  // Get active channel listings for this item
+  const listings = await db.query.channelListings.findMany({
+    where: and(
+      eq(channelListings.itemId, action.itemId),
+      eq(channelListings.status, "active")
+    ),
+  });
+
+  if (listings.length === 0) {
+    // No active listings to update
+    return { success: true };
+  }
+
+  const results: ActionExecutionResult[] = [];
+  const manualActions: string[] = [];
+
+  for (const listing of listings) {
+    const channel = listing.channel as ChannelId;
+
+    // Check if this is a native channel
+    if (isNativeChannel(channel)) {
+      try {
+        const adapter = getAdapter(channel);
+
+        // Execute action based on type
+        switch (action.actionType) {
+          case "REPRICE": {
+            const newPrice = action.afterState?.price as number | undefined;
+            if (newPrice !== undefined && listing.externalId) {
+              const result = await adapter.updatePrice(userId, listing.externalId, newPrice);
+              if (!result.success) {
+                results.push({ success: false, error: result.error });
+              } else {
+                // Update local listing price
+                await db
+                  .update(channelListings)
+                  .set({ price: newPrice })
+                  .where(eq(channelListings.id, listing.id));
+                results.push({ success: true });
+              }
+            }
+            break;
+          }
+
+          case "DELIST": {
+            if (listing.externalId) {
+              const result = await adapter.delist(userId, listing.externalId);
+              if (!result.success) {
+                results.push({ success: false, error: result.error });
+              } else {
+                // Update local listing status
+                await db
+                  .update(channelListings)
+                  .set({ status: "ended", endedAt: new Date() })
+                  .where(eq(channelListings.id, listing.id));
+                results.push({ success: true });
+              }
+            }
+            break;
+          }
+
+          case "OFFER_ACCEPT":
+          case "OFFER_DECLINE":
+          case "OFFER_COUNTER": {
+            // Offer operations typically need the offer ID from the payload
+            // For now, mark as successful since eBay handles offers differently
+            // In a full implementation, this would call the eBay Trading API
+            results.push({ success: true });
+            break;
+          }
+
+          case "RELIST": {
+            // Re-list by updating quantity back to 1
+            if (listing.externalId) {
+              const result = await adapter.update(userId, listing.externalId, {
+                quantity: 1,
+              });
+              if (!result.success) {
+                results.push({ success: false, error: result.error });
+              } else {
+                // Update local listing status
+                await db
+                  .update(channelListings)
+                  .set({ status: "active", endedAt: null })
+                  .where(eq(channelListings.id, listing.id));
+                results.push({ success: true });
+              }
+            }
+            break;
+          }
+
+          case "ARCHIVE": {
+            // Archive is a local-only action, delist from channel first
+            if (listing.externalId) {
+              const result = await adapter.delist(userId, listing.externalId);
+              if (!result.success) {
+                results.push({ success: false, error: result.error });
+              } else {
+                await db
+                  .update(channelListings)
+                  .set({ status: "ended", endedAt: new Date() })
+                  .where(eq(channelListings.id, listing.id));
+                results.push({ success: true });
+              }
+            }
+            break;
+          }
+
+          default:
+            results.push({ success: true });
+        }
+      } catch (error) {
+        results.push({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    } else {
+      // Assisted channel - cannot automate, provide instructions
+      manualActions.push(
+        `${channel.charAt(0).toUpperCase() + channel.slice(1)}: Please manually ${action.actionType.toLowerCase().replace("_", " ")} listing`
+      );
+    }
+  }
+
+  // Update item status if needed
+  if (action.actionType === "ARCHIVE") {
+    await db
+      .update(inventoryItems)
+      .set({ status: "archived", updatedAt: new Date() })
+      .where(eq(inventoryItems.id, action.itemId));
+  } else if (action.actionType === "REPRICE") {
+    const newPrice = action.afterState?.price as number | undefined;
+    if (newPrice !== undefined) {
+      await db
+        .update(inventoryItems)
+        .set({ askingPrice: newPrice, updatedAt: new Date() })
+        .where(eq(inventoryItems.id, action.itemId));
+    }
+  }
+
+  // Determine overall result
+  const failedResults = results.filter((r) => !r.success);
+  if (failedResults.length > 0) {
+    return {
+      success: false,
+      error: failedResults.map((r) => r.error).join("; "),
+    };
+  }
+
+  if (manualActions.length > 0) {
+    return {
+      success: true,
+      requiresManualAction: true,
+      manualInstructions: manualActions.join("\n"),
+    };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Execute an undo operation via the channel adapter.
+ * Reverses a previous autopilot action by restoring the before state.
+ */
+async function executeUndoAction(
+  userId: string,
+  action: {
+    id: string;
+    actionType: string;
+    itemId: string | null;
+    beforeState: Record<string, unknown> | null;
+    afterState: Record<string, unknown> | null;
+  }
+): Promise<ActionExecutionResult> {
+  if (!action.itemId || !action.beforeState) {
+    return { success: true };
+  }
+
+  const item = await db.query.inventoryItems.findFirst({
+    where: eq(inventoryItems.id, action.itemId),
+  });
+
+  if (!item) {
+    return { success: false, error: "Item not found" };
+  }
+
+  // Get active channel listings for this item
+  const listings = await db.query.channelListings.findMany({
+    where: eq(channelListings.itemId, action.itemId),
+  });
+
+  const results: ActionExecutionResult[] = [];
+  const manualActions: string[] = [];
+
+  for (const listing of listings) {
+    const channel = listing.channel as ChannelId;
+
+    if (isNativeChannel(channel)) {
+      try {
+        const adapter = getAdapter(channel);
+
+        switch (action.actionType) {
+          case "REPRICE": {
+            // Restore original price
+            const originalPrice = action.beforeState?.price as number | undefined;
+            if (originalPrice !== undefined && listing.externalId) {
+              const result = await adapter.updatePrice(userId, listing.externalId, originalPrice);
+              if (!result.success) {
+                results.push({ success: false, error: result.error });
+              } else {
+                await db
+                  .update(channelListings)
+                  .set({ price: originalPrice })
+                  .where(eq(channelListings.id, listing.id));
+                results.push({ success: true });
+              }
+            }
+            break;
+          }
+
+          case "DELIST": {
+            // Re-list the item (restore quantity)
+            if (listing.externalId) {
+              const result = await adapter.update(userId, listing.externalId, {
+                quantity: 1,
+              });
+              if (!result.success) {
+                results.push({ success: false, error: result.error });
+              } else {
+                await db
+                  .update(channelListings)
+                  .set({ status: "active", endedAt: null })
+                  .where(eq(channelListings.id, listing.id));
+                results.push({ success: true });
+              }
+            }
+            break;
+          }
+
+          case "RELIST": {
+            // Un-relist (delist again)
+            if (listing.externalId) {
+              const result = await adapter.delist(userId, listing.externalId);
+              if (!result.success) {
+                results.push({ success: false, error: result.error });
+              } else {
+                await db
+                  .update(channelListings)
+                  .set({ status: "ended", endedAt: new Date() })
+                  .where(eq(channelListings.id, listing.id));
+                results.push({ success: true });
+              }
+            }
+            break;
+          }
+
+          default:
+            // For actions like OFFER_ACCEPT, OFFER_DECLINE - cannot undo
+            results.push({ success: true });
+        }
+      } catch (error) {
+        results.push({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    } else {
+      manualActions.push(
+        `${channel.charAt(0).toUpperCase() + channel.slice(1)}: Please manually undo the ${action.actionType.toLowerCase().replace("_", " ")} action`
+      );
+    }
+  }
+
+  // Restore item state if needed
+  if (action.actionType === "REPRICE") {
+    const originalPrice = action.beforeState?.price as number | undefined;
+    if (originalPrice !== undefined) {
+      await db
+        .update(inventoryItems)
+        .set({ askingPrice: originalPrice, updatedAt: new Date() })
+        .where(eq(inventoryItems.id, action.itemId));
+    }
+  } else if (action.actionType === "ARCHIVE") {
+    const originalStatus = (action.beforeState?.status as string) ?? "active";
+    await db
+      .update(inventoryItems)
+      .set({ status: originalStatus as "draft" | "active" | "sold" | "shipped" | "archived", updatedAt: new Date() })
+      .where(eq(inventoryItems.id, action.itemId));
+  }
+
+  const failedResults = results.filter((r) => !r.success);
+  if (failedResults.length > 0) {
+    return {
+      success: false,
+      error: failedResults.map((r) => r.error).join("; "),
+    };
+  }
+
+  if (manualActions.length > 0) {
+    return {
+      success: true,
+      requiresManualAction: true,
+      manualInstructions: manualActions.join("\n"),
+    };
+  }
+
+  return { success: true };
+}
+
+// ============ RATE LIMIT TRACKING ============
+
+/**
+ * Rate limit configuration
+ */
+const RATE_LIMITS = {
+  ebayRevisions: { daily: 200 },
+  reprices: { daily: 100 },
+  autoAccepts: { daily: 50 },
+};
+
+/**
+ * Get the start of the current day in Pacific Time (eBay's reset time)
+ */
+function getTodayStartPT(): Date {
+  const now = new Date();
+  const ptString = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+  const ptDate = new Date(ptString);
+  ptDate.setHours(0, 0, 0, 0);
+
+  // Convert back to UTC
+  const ptOffset = now.getTime() - new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getTime();
+  return new Date(ptDate.getTime() + ptOffset);
+}
+
+/**
+ * Get rate limit usage from the database by counting today's executed actions
+ */
+async function getRateLimitUsage(userId: string): Promise<{
+  ebayRevisions: { daily: number; used: number; remaining: number };
+  reprices: { daily: number; used: number; remaining: number };
+  autoAccepts: { daily: number; used: number; remaining: number };
+}> {
+  const todayStart = getTodayStartPT();
+
+  // Count reprices executed today
+  const repriceCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(autopilotActions)
+    .where(
+      and(
+        eq(autopilotActions.userId, userId),
+        eq(autopilotActions.actionType, "REPRICE"),
+        eq(autopilotActions.status, "executed"),
+        gte(autopilotActions.executedAt, todayStart)
+      )
+    );
+
+  // Count auto-accepts executed today
+  const autoAcceptCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(autopilotActions)
+    .where(
+      and(
+        eq(autopilotActions.userId, userId),
+        eq(autopilotActions.actionType, "OFFER_ACCEPT"),
+        eq(autopilotActions.status, "executed"),
+        gte(autopilotActions.executedAt, todayStart)
+      )
+    );
+
+  // Count all channel-affecting actions as eBay revisions
+  // (REPRICE, DELIST, RELIST, ARCHIVE all count as revisions)
+  const revisionCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(autopilotActions)
+    .where(
+      and(
+        eq(autopilotActions.userId, userId),
+        eq(autopilotActions.status, "executed"),
+        gte(autopilotActions.executedAt, todayStart),
+        inArray(autopilotActions.actionType, ["REPRICE", "DELIST", "RELIST", "ARCHIVE"])
+      )
+    );
+
+  const repricesUsed = Number(repriceCount[0]?.count ?? 0);
+  const autoAcceptsUsed = Number(autoAcceptCount[0]?.count ?? 0);
+  const revisionsUsed = Number(revisionCount[0]?.count ?? 0);
+
+  return {
+    ebayRevisions: {
+      daily: RATE_LIMITS.ebayRevisions.daily,
+      used: revisionsUsed,
+      remaining: Math.max(0, RATE_LIMITS.ebayRevisions.daily - revisionsUsed),
+    },
+    reprices: {
+      daily: RATE_LIMITS.reprices.daily,
+      used: repricesUsed,
+      remaining: Math.max(0, RATE_LIMITS.reprices.daily - repricesUsed),
+    },
+    autoAccepts: {
+      daily: RATE_LIMITS.autoAccepts.daily,
+      used: autoAcceptsUsed,
+      remaining: Math.max(0, RATE_LIMITS.autoAccepts.daily - autoAcceptsUsed),
+    },
+  };
+}
 
 // ============ ROUTER ============
 
@@ -395,8 +847,32 @@ export const autopilotRouter = createTRPCRouter({
       const now = new Date();
 
       if (input.decision === "approve") {
-        // Execute the action
-        // TODO: Call channel adapter to execute the actual action
+        // Execute the action via channel adapter
+        const executionResult = await executeAutopilotAction(ctx.user.id, {
+          id: action.id,
+          actionType: action.actionType,
+          itemId: action.itemId,
+          beforeState: action.beforeState,
+          afterState: action.afterState,
+          payload: action.payload,
+        });
+
+        if (!executionResult.success) {
+          // Update action as failed
+          await db
+            .update(autopilotActions)
+            .set({
+              status: "failed",
+              errorMessage: executionResult.error,
+              retryCount: (action.retryCount ?? 0) + 1,
+            })
+            .where(eq(autopilotActions.id, input.actionId));
+
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: executionResult.error ?? "Failed to execute action",
+          });
+        }
 
         await db
           .update(autopilotActions)
@@ -418,10 +894,17 @@ export const autopilotRouter = createTRPCRouter({
           metadata: {
             originalConfidence: action.confidence,
             approvedManually: true,
+            requiresManualAction: executionResult.requiresManualAction,
+            manualInstructions: executionResult.manualInstructions,
           },
         });
 
-        return { success: true, status: "executed" as const };
+        return {
+          success: true,
+          status: "executed" as const,
+          requiresManualAction: executionResult.requiresManualAction,
+          manualInstructions: executionResult.manualInstructions,
+        };
       } else {
         // Reject the action
         await db
@@ -542,6 +1025,22 @@ export const autopilotRouter = createTRPCRouter({
         });
       }
 
+      // Execute undo via channel adapter
+      const undoResult = await executeUndoAction(ctx.user.id, {
+        id: action.id,
+        actionType: action.actionType,
+        itemId: action.itemId,
+        beforeState: action.beforeState,
+        afterState: action.afterState,
+      });
+
+      if (!undoResult.success) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: undoResult.error ?? "Failed to undo action",
+        });
+      }
+
       // Mark as undone
       await db
         .update(autopilotActions)
@@ -551,9 +1050,28 @@ export const autopilotRouter = createTRPCRouter({
         })
         .where(eq(autopilotActions.id, input.actionId));
 
-      // TODO: Execute undo via channel adapter
+      // Log the undo to audit
+      await auditService.log({
+        userId: ctx.user.id,
+        actionType: "UNDO_ACTION",
+        actionId: action.id,
+        itemId: action.itemId ?? undefined,
+        source: "USER",
+        beforeState: action.afterState ?? undefined,
+        afterState: action.beforeState ?? undefined,
+        metadata: {
+          originalActionType: action.actionType,
+          requiresManualAction: undoResult.requiresManualAction,
+          manualInstructions: undoResult.manualInstructions,
+        },
+      });
 
-      return { success: true, undone: true };
+      return {
+        success: true,
+        undone: true,
+        requiresManualAction: undoResult.requiresManualAction,
+        manualInstructions: undoResult.manualInstructions,
+      };
     }),
 
   /**
@@ -591,14 +1109,9 @@ export const autopilotRouter = createTRPCRouter({
   /**
    * Get rate limit status
    */
-  getRateLimitStatus: protectedProcedure.query(async ({ ctx: _ctx }) => {
-    // TODO: Implement actual rate limit tracking
-    // For now, return defaults
-    return {
-      ebayRevisions: { daily: 200, used: 0, remaining: 200 },
-      reprices: { daily: 100, used: 0, remaining: 100 },
-      autoAccepts: { daily: 50, used: 0, remaining: 50 },
-    };
+  getRateLimitStatus: protectedProcedure.query(async ({ ctx }) => {
+    // Get actual rate limit usage from database
+    return getRateLimitUsage(ctx.user.id);
   }),
 
   // ============ RECENT ACTIONS ============

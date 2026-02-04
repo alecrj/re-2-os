@@ -209,10 +209,9 @@ export function ChannelChart({ data, loading = false }: ChannelChartProps) {
                     axisLine={false}
                   />
                   <Tooltip
-                    formatter={(value, name) => [
-                      name === "Sales" ? value : formatCurrency(Number(value) || 0),
-                      String(name),
-                    ]}
+                    formatter={(value) =>
+                      typeof value === 'number' ? formatCurrency(value) : value
+                    }
                   />
                   <Legend />
                   <Bar
