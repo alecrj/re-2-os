@@ -10,6 +10,11 @@ import { handleOffer } from './handle-offer';
 import { repriceCheck, scheduledRepriceCheck } from './reprice-check';
 import { staleCheck, scheduledStaleCheck } from './stale-check';
 import { syncOrders } from './sync-orders';
+import {
+  handleEbayOrderReceived,
+  handleEbayItemSold,
+  handleEbayOrderShipped,
+} from './handle-ebay-webhook';
 
 /**
  * All Inngest functions for ResellerOS.
@@ -26,4 +31,9 @@ export const functions = [
 
   // Sync functions
   syncOrders,
+
+  // eBay webhook handlers
+  handleEbayOrderReceived,
+  handleEbayItemSold,
+  handleEbayOrderShipped,
 ];

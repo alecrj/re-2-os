@@ -12,7 +12,7 @@ import { syncOrders } from '../functions/sync-orders';
 describe('Inngest Functions', () => {
   describe('functions array', () => {
     it('should export all functions', () => {
-      expect(functions).toHaveLength(7);
+      expect(functions).toHaveLength(10); // 7 core + 3 eBay webhook handlers
     });
 
     it('should include delistOnSale', () => {

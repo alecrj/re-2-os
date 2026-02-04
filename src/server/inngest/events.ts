@@ -88,6 +88,35 @@ export interface DelistOnSaleEvent {
   };
 }
 
+// ============ EBAY WEBHOOK EVENTS ============
+
+export interface EbayOrderReceivedEvent {
+  data: {
+    notificationId: string;
+    topic: string;
+    orderId?: string;
+    payload: Record<string, unknown>;
+  };
+}
+
+export interface EbayItemSoldEvent {
+  data: {
+    notificationId: string;
+    topic: string;
+    itemId?: string;
+    payload: Record<string, unknown>;
+  };
+}
+
+export interface EbayOrderShippedEvent {
+  data: {
+    notificationId: string;
+    topic: string;
+    orderId?: string;
+    payload: Record<string, unknown>;
+  };
+}
+
 // ============ SCHEDULED EVENTS ============
 
 export interface ScheduledRepriceEvent {
@@ -125,4 +154,9 @@ export type Events = {
   'scheduled/reprice': ScheduledRepriceEvent;
   'scheduled/stale-check': ScheduledStaleCheckEvent;
   'scheduled/sync': ScheduledSyncEvent;
+
+  // eBay webhook events
+  'ebay/order.received': EbayOrderReceivedEvent;
+  'ebay/item.sold': EbayItemSoldEvent;
+  'ebay/order.shipped': EbayOrderShippedEvent;
 };
