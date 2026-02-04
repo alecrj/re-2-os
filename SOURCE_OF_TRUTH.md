@@ -4,7 +4,7 @@
 > Read this FIRST every session.
 
 ## Current State
-- **Phase**: PHASE-3-ARCHITECTURE
+- **Phase**: PHASE-4-IMPLEMENTATION
 - **Status**: In Progress
 - **Blocking Issues**: None
 - **Last Updated**: 2026-02-03
@@ -15,8 +15,8 @@
 | 0-BOOTSTRAP | ✅ Complete | 2026-02-03 | 2026-02-03 | 2026-02-03 |
 | 1-DISCOVERY | ✅ Complete | 2026-02-03 | 2026-02-03 | 2026-02-03 |
 | 2-PLANNING | ✅ Complete | 2026-02-03 | 2026-02-03 | 2026-02-03 |
-| 3-ARCHITECTURE | 🔄 Active | 2026-02-03 | - | - |
-| 4-IMPLEMENTATION | ⏳ Pending | - | - | - |
+| 3-ARCHITECTURE | ✅ Complete | 2026-02-03 | 2026-02-03 | 2026-02-03 |
+| 4-IMPLEMENTATION | 🔄 Active | 2026-02-03 | - | - |
 
 ## Active Subtasks
 | ID | Title | Owner | Status | Blocked By |
@@ -26,11 +26,11 @@
 ## Completed Subtasks (Current Phase)
 | ID | Title | Completed | Validated |
 |----|-------|-----------|-----------|
-| 201 | Define North Star | 2026-02-03 | ✅ Vision locked |
-| 202 | Define Requirements | 2026-02-03 | ✅ 7 user stories |
-| 203 | Define Pricing Tiers | 2026-02-03 | ✅ 5 tiers defined |
-| 204 | Channel Strategy | 2026-02-03 | ✅ eBay native, others assisted |
-| 205 | Autopilot Rules | 2026-02-03 | ✅ Full rulebook |
+| 301 | System Architecture | 2026-02-03 | ✅ 1,361 line doc |
+| 302 | Data Models | 2026-02-03 | ✅ Relations, indexes, JSON docs added |
+| 303 | Channel Adapters | 2026-02-03 | ✅ All criteria met |
+| 304 | Autopilot Engine | 2026-02-03 | ✅ Aligns with rulebook |
+| 305 | API Design | 2026-02-03 | ✅ 7 routers, 43 procedures |
 
 ## Blocked Items
 | Item | Reason | Since | Action Needed |
@@ -47,8 +47,6 @@
 - Validation checkpoint: .claude/validation/checkpoints/CHECKPOINT-ARCHITECTURE.md
 
 ## Next Actions
-1. Read PHASE-3-ARCHITECTURE.md for subtasks
-2. Design system architecture
-3. Define data models
-4. Create API specifications
-5. Design component structure
+1. Read PHASE-4-IMPLEMENTATION.md for implementation subtasks
+2. Set up project scaffolding (Next.js, tRPC, Drizzle)
+3. Implement core features following architecture doc
