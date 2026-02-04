@@ -1,21 +1,14 @@
 /**
  * NextAuth.js Middleware for Route Protection
  *
+ * Uses edge-compatible auth config (no database adapter).
  * Protects dashboard routes and redirects unauthenticated users to login.
  */
-import { auth } from "@/server/auth";
+import NextAuth from "next-auth";
+import { edgeAuthConfig, protectedPaths } from "@/server/auth/edge-config";
 import { NextResponse } from "next/server";
 
-/**
- * Protected routes that require authentication
- */
-const protectedPaths = [
-  "/inventory",
-  "/listings",
-  "/orders",
-  "/analytics",
-  "/settings",
-];
+const { auth } = NextAuth(edgeAuthConfig);
 
 /**
  * Auth routes - redirect to dashboard if already authenticated
@@ -64,6 +57,6 @@ export const config = {
      * - public folder
      * - api routes (handled separately)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

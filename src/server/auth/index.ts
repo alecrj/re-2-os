@@ -17,9 +17,10 @@ export const {
 } = NextAuth(authConfig);
 
 /**
- * Re-export the config for middleware use
+ * Re-export configs
  */
 export { authConfig } from "./config";
+export { edgeAuthConfig } from "./edge-config";
 
 /**
  * Re-export eBay provider utilities
