@@ -50,13 +50,9 @@ export const authConfig: NextAuthConfig = {
       clientId: process.env.EBAY_CLIENT_ID!,
       clientSecret: process.env.EBAY_CLIENT_SECRET!,
       environment: ebayEnvironment,
-      // Add more scopes as needed for full API access
+      // Start with basic scope, add more after confirming auth works
       scopes: [
         "https://api.ebay.com/oauth/api_scope",
-        "https://api.ebay.com/oauth/api_scope/sell.inventory",
-        "https://api.ebay.com/oauth/api_scope/sell.marketing",
-        "https://api.ebay.com/oauth/api_scope/sell.account",
-        "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
       ],
     }),
   ],
