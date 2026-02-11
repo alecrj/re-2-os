@@ -127,7 +127,8 @@ export function EbayProvider(
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
             expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
-            token_type: tokens.token_type,
+            // eBay returns "User Access Token" but NextAuth expects "Bearer"
+            token_type: "Bearer",
           },
         };
       },
