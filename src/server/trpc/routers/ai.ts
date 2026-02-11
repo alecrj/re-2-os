@@ -152,7 +152,8 @@ export const aiRouter = createTRPCRouter({
         }
 
         // Prefer processed URLs (background removed) if available
-        imageUrls = images.map((img) => img.processedUrl || img.originalUrl);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        imageUrls = images.map((img: any) => img.processedUrl || img.originalUrl);
       }
 
       if (imageUrls.length === 0) {

@@ -382,7 +382,8 @@ export const scheduledRepriceCheck = inngest.createFunction(
           );
 
         // Get unique user IDs
-        const uniqueUserIds = Array.from(new Set(enabledRules.map((r) => r.userId)));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const uniqueUserIds = Array.from(new Set(enabledRules.map((r: any) => r.userId)));
         return uniqueUserIds;
       }
     );

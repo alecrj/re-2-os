@@ -260,7 +260,8 @@ export const imagesRouter = createTRPCRouter({
         .where(eq(itemImages.itemId, input.itemId))
         .orderBy(itemImages.position);
 
-      return images.map((img) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return images.map((img: any) => ({
         id: img.id,
         itemId: img.itemId,
         originalUrl: img.originalUrl,

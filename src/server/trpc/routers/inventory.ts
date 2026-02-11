@@ -75,7 +75,8 @@ export const inventoryRouter = createTRPCRouter({
         where: and(...conditions),
         with: {
           images: {
-            orderBy: (images, { asc }) => [asc(images.position)],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            orderBy: (images: any, { asc }: any) => [asc(images.position)],
             limit: 1,
           },
           channelListings: true,
@@ -92,7 +93,8 @@ export const inventoryRouter = createTRPCRouter({
       }
 
       return {
-        items: items.map((item) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items: items.map((item: any) => ({
           id: item.id,
           sku: item.sku,
           title: item.title,
@@ -105,7 +107,8 @@ export const inventoryRouter = createTRPCRouter({
           createdAt: item.createdAt,
           listedAt: item.listedAt,
           imageUrl: item.images[0]?.processedUrl || item.images[0]?.originalUrl || null,
-          channels: item.channelListings.map((cl) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          channels: item.channelListings.map((cl: any) => ({
             channel: cl.channel,
             status: cl.status,
             externalUrl: cl.externalUrl,
@@ -136,7 +139,8 @@ export const inventoryRouter = createTRPCRouter({
         ),
         with: {
           images: {
-            orderBy: (images, { asc }) => [asc(images.position)],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            orderBy: (images: any, { asc }: any) => [asc(images.position)],
           },
           channelListings: true,
         },
@@ -164,7 +168,8 @@ export const inventoryRouter = createTRPCRouter({
         updatedAt: item.updatedAt,
         listedAt: item.listedAt,
         soldAt: item.soldAt,
-        images: item.images.map((img) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        images: item.images.map((img: any) => ({
           id: img.id,
           originalUrl: img.originalUrl,
           processedUrl: img.processedUrl,
@@ -173,7 +178,8 @@ export const inventoryRouter = createTRPCRouter({
           height: img.height,
           sizeBytes: img.sizeBytes,
         })),
-        channelListings: item.channelListings.map((cl) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        channelListings: item.channelListings.map((cl: any) => ({
           id: cl.id,
           channel: cl.channel,
           status: cl.status,

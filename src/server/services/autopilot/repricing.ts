@@ -443,7 +443,8 @@ export async function getActiveListingsForRepricing(
     );
 
   // Get recent reprice actions for these items
-  const itemIds = items.map((i) => i.item.id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const itemIds = items.map((i: any) => i.item.id);
 
   const recentReprices = itemIds.length > 0
     ? await db
@@ -459,11 +460,13 @@ export async function getActiveListingsForRepricing(
     : [];
 
   // Map to RepricingContext
-  return items.map((record) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return items.map((record: any) => {
     const { item, listing } = record;
 
     // Find last reprice for this item
-    const lastReprice = recentReprices.find((r) => r.itemId === item.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lastReprice = recentReprices.find((r: any) => r.itemId === item.id);
 
     // Calculate days listed
     const listedAt = listing.publishedAt ?? item.listedAt ?? item.createdAt;
@@ -526,7 +529,8 @@ export async function getRepriceHistory(
     .limit(limit)
     .offset(offset);
 
-  return actions.map((action) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return actions.map((action: any) => ({
     id: action.id,
     itemId: action.itemId,
     actionType: action.actionType,

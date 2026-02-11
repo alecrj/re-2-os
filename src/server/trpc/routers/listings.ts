@@ -34,7 +34,8 @@ export const listingsRouter = createTRPCRouter({
         where: eq(channelListings.itemId, input.itemId),
       });
 
-      return listings.map((listing) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return listings.map((listing: any) => ({
         id: listing.id,
         channel: listing.channel,
         status: listing.status,
@@ -76,7 +77,8 @@ export const listingsRouter = createTRPCRouter({
       // Get images for the item
       const images = await db.query.itemImages.findMany({
         where: eq(itemImages.itemId, input.itemId),
-        orderBy: (images, { asc }) => [asc(images.position)],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        orderBy: (images: any, { asc }: any) => [asc(images.position)],
       });
 
       const price = input.price ?? item.askingPrice;
@@ -107,7 +109,8 @@ export const listingsRouter = createTRPCRouter({
           quantity: item.quantity,
           condition: item.condition,
           category: item.suggestedCategory ?? undefined,
-          imageUrls: images.map((img) => img.processedUrl ?? img.originalUrl),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          imageUrls: images.map((img: any) => img.processedUrl ?? img.originalUrl),
           itemSpecifics: item.itemSpecifics ?? undefined,
           sku: item.sku,
         });

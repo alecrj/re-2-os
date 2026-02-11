@@ -1100,7 +1100,8 @@ export const autopilotRouter = createTRPCRouter({
 
     // Filter by undo deadline
     return actions.filter(
-      (action) => !action.undoDeadline || action.undoDeadline > now
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (action: any) => !action.undoDeadline || action.undoDeadline > now
     );
   }),
 

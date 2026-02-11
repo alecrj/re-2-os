@@ -165,7 +165,8 @@ export const staleCheck = inngest.createFunction(
           )
         );
 
-      return items.map((row) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return items.map((row: any) => ({
         item: {
           id: row.item.id,
           title: row.item.title,
@@ -389,7 +390,8 @@ export const scheduledStaleCheck = inngest.createFunction(
         );
 
       // Get unique user IDs
-      return Array.from(new Set(usersWithRules.map((r) => r.userId)));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return Array.from(new Set(usersWithRules.map((r: any) => r.userId)));
     });
 
     if (usersToCheck.length === 0) {

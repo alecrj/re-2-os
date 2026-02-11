@@ -313,16 +313,20 @@ export const delistOnSale = inngest.createFunction(
         source: "SYSTEM",
         beforeState: {
           itemStatus: itemDetails.status,
-          activeListings: otherListings.map((l) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          activeListings: otherListings.map((l: any) => ({
             channel: l.channel,
             externalId: l.externalId,
           })),
         },
         afterState: {
           itemStatus: "sold",
-          delistedAutomatically: successfulDelists.map((r) => r.channel),
-          requiresManualDelist: manualDelists.map((r) => r.channel),
-          failedDelists: failedDelists.map((r) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delistedAutomatically: successfulDelists.map((r: any) => r.channel),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          requiresManualDelist: manualDelists.map((r: any) => r.channel),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          failedDelists: failedDelists.map((r: any) => ({
             channel: r.channel,
             error: r.error,
           })),

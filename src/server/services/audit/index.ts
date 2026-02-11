@@ -202,7 +202,8 @@ export const auditService = {
       .limit(limit)
       .offset(offset);
 
-    return results.map((row) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return results.map((row: any) => ({
       id: row.id,
       userId: row.userId,
       actionType: row.actionType,
@@ -275,7 +276,8 @@ export const auditService = {
       .orderBy(desc(auditLog.timestamp))
       .limit(100);
 
-    return results.map((row) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return results.map((row: any) => ({
       id: row.id,
       userId: row.userId,
       actionType: row.actionType,

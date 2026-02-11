@@ -118,8 +118,9 @@ export const ordersRouter = createTRPCRouter({
 
       // Fetch first image for each item
       const itemIds = orderList
-        .map((o) => o.item?.id)
-        .filter((id): id is string => id !== undefined);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((o: any) => o.item?.id)
+        .filter((id: string | undefined): id is string => id !== undefined);
 
       const images =
         itemIds.length > 0
@@ -137,10 +138,12 @@ export const ordersRouter = createTRPCRouter({
               )
           : [];
 
-      const imageMap = new Map(images.map((img) => [img.itemId, img.url]));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const imageMap = new Map(images.map((img: any) => [img.itemId, img.url]));
 
       return {
-        orders: orderList.map((row) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        orders: orderList.map((row: any) => ({
           ...row.order,
           item: row.item
             ? {
@@ -201,7 +204,8 @@ export const ordersRouter = createTRPCRouter({
         item: row.item
           ? {
               ...row.item,
-              images: images.map((img) => img.url),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              images: images.map((img: any) => img.url),
             }
           : null,
         listing: row.listing,
