@@ -220,7 +220,8 @@ export function PendingActions() {
     if (selectedIds.size === pendingData.actions.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(pendingData.actions.map((a) => a.id)));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setSelectedIds(new Set(pendingData.actions.map((a: any) => a.id)));
     }
   };
 
@@ -353,7 +354,8 @@ export function PendingActions() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {actions.map((action) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {actions.map((action: any) => (
               <ActionRow
                 key={action.id}
                 action={action as unknown as PendingAction}

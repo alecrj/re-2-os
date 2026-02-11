@@ -47,7 +47,8 @@ function RecentActivityCard() {
           <p className="text-sm text-muted-foreground">No recent activity</p>
         ) : (
           <ul className="space-y-3">
-            {actions.map((action) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {actions.map((action: any) => (
               <li key={action.id} className="flex items-center justify-between text-sm">
                 <div className="flex flex-col">
                   <span className="font-medium line-clamp-1">

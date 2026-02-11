@@ -300,7 +300,8 @@ export default function OrdersPage() {
         open={isRecordSaleOpen}
         onOpenChange={setIsRecordSaleOpen}
         items={
-          (inventoryQuery.data?.items ?? []).map((item) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (inventoryQuery.data?.items ?? []).map((item: any) => ({
             id: item.id,
             title: item.title,
             sku: item.sku,
