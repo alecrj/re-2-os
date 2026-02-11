@@ -429,8 +429,8 @@ export function InventoryTable({ className }: InventoryTableProps) {
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {item.channels.map(
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           (channel: any) =>
                             channel.externalUrl && (
                               <DropdownMenuItem
