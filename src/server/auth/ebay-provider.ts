@@ -1,43 +1,23 @@
 /**
  * eBay OAuth 2.0 Provider for NextAuth.js
  *
- * Implements the eBay User Access Token flow:
- * https://developer.ebay.com/api-docs/static/oauth-authorization-code-grant.html
+ * Custom implementation to handle eBay's non-standard OAuth response
+ * (eBay returns token_type: "user access token" instead of "Bearer")
  */
-import type { OAuthConfig, OAuthUserConfig } from "next-auth/providers";
-
-/**
- * TokenSet type for OAuth tokens
- */
-interface TokenSet {
-  access_token?: string;
-  refresh_token?: string;
-  expires_at?: number;
-  token_type?: string;
-  id_token?: string;
-  scope?: string;
-}
+import type { OAuthConfig } from "next-auth/providers";
 
 export interface EbayProfile {
   userId: string;
   username: string;
 }
 
-export interface EbayProviderConfig extends OAuthUserConfig<EbayProfile> {
-  /**
-   * eBay environment: sandbox or production
-   */
+export interface EbayProviderConfig {
+  clientId: string;
+  clientSecret: string;
   environment?: "sandbox" | "production";
-  /**
-   * OAuth scopes to request
-   * @default ["https://api.ebay.com/oauth/api_scope"]
-   */
   scopes?: string[];
 }
 
-/**
- * eBay OAuth endpoints by environment
- */
 const EBAY_ENDPOINTS = {
   sandbox: {
     authorization: "https://auth.sandbox.ebay.com/oauth2/authorize",
@@ -51,20 +31,9 @@ const EBAY_ENDPOINTS = {
   },
 };
 
-/**
- * Default scopes for eBay OAuth
- * https://developer.ebay.com/api-docs/static/oauth-scopes.html
- */
-const DEFAULT_SCOPES = [
-  "https://api.ebay.com/oauth/api_scope", // Basic access
-];
+const DEFAULT_SCOPES = ["https://api.ebay.com/oauth/api_scope"];
 
-/**
- * Create eBay OAuth provider for NextAuth.js
- */
-export function EbayProvider(
-  config: EbayProviderConfig
-): OAuthConfig<EbayProfile> {
+export function EbayProvider(config: EbayProviderConfig): OAuthConfig<EbayProfile> {
   const environment = config.environment ?? "sandbox";
   const endpoints = EBAY_ENDPOINTS[environment];
   const scopes = config.scopes ?? DEFAULT_SCOPES;
@@ -74,10 +43,8 @@ export function EbayProvider(
     name: "eBay",
     type: "oauth",
 
-    // eBay requires Basic auth for token exchange
-    client: {
-      token_endpoint_auth_method: "client_secret_basic",
-    },
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
 
     authorization: {
       url: endpoints.authorization,
@@ -87,79 +54,49 @@ export function EbayProvider(
       },
     },
 
+    // Completely custom token endpoint handling
     token: {
       url: endpoints.token,
-      async request(context: {
-        client: unknown;
-        params: Record<string, unknown>;
-        checks: unknown;
-        provider: { callbackUrl: string };
-      }): Promise<{ tokens: TokenSet }> {
-        const { params, provider } = context;
-        // eBay requires application/x-www-form-urlencoded
-        // and Basic auth header
-        const credentials = Buffer.from(
-          `${config.clientId}:${config.clientSecret}`
-        ).toString("base64");
+      conform: async (response: Response) => {
+        // Clone the response so we can read it
+        const cloned = response.clone();
+        const body = await cloned.json();
 
-        const response = await fetch(endpoints.token, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Authorization: `Basic ${credentials}`,
-          },
-          body: new URLSearchParams({
-            grant_type: "authorization_code",
-            code: params.code as string,
-            redirect_uri: provider.callbackUrl,
-          }),
+        // Fix the token_type to be "Bearer" which NextAuth expects
+        body.token_type = "Bearer";
+
+        // Return a new response with fixed body
+        return new Response(JSON.stringify(body), {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
         });
-
-        if (!response.ok) {
-          const error = await response.text();
-          throw new Error(`eBay token error: ${error}`);
-        }
-
-        const tokens = await response.json();
-
-        return {
-          tokens: {
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
-            // eBay returns "User Access Token" but NextAuth expects "Bearer"
-            token_type: "Bearer",
-          },
-        };
       },
+    },
+
+    client: {
+      token_endpoint_auth_method: "client_secret_basic",
     },
 
     userinfo: {
       url: endpoints.userinfo,
-      async request(context: {
-        tokens: TokenSet;
-        provider: unknown;
-      }): Promise<EbayProfile> {
-        const { tokens } = context;
-        // eBay user info endpoint
-        const response = await fetch(endpoints.userinfo, {
-          headers: {
-            Authorization: `Bearer ${tokens.access_token}`,
-            "Content-Type": "application/json",
-          },
-        });
+      async request({ tokens }: { tokens: { access_token?: string } }) {
+        try {
+          const response = await fetch(endpoints.userinfo, {
+            headers: {
+              Authorization: `Bearer ${tokens.access_token}`,
+              "Content-Type": "application/json",
+            },
+          });
 
-        if (!response.ok) {
-          // If we can't get user info, create a minimal profile
-          // This can happen if the scope doesn't include identity
-          return {
-            userId: "unknown",
-            username: "eBay User",
-          };
+          if (!response.ok) {
+            return { userId: "ebay-user", username: "eBay User" };
+          }
+
+          return await response.json();
+        } catch {
+          return { userId: "ebay-user", username: "eBay User" };
         }
-
-        const profile = await response.json();
-        return profile;
       },
     },
 
@@ -167,7 +104,7 @@ export function EbayProvider(
       return {
         id: profile.userId || "ebay-user",
         name: profile.username || "eBay User",
-        email: null, // eBay doesn't provide email in basic scope
+        email: null,
         image: null,
       };
     },
@@ -176,19 +113,11 @@ export function EbayProvider(
       bg: "#0064D2",
       text: "#FFFFFF",
     },
-
-    options: config,
   };
 }
 
 /**
  * Refresh an eBay access token
- *
- * @param refreshToken - The refresh token to use
- * @param clientId - eBay client ID
- * @param clientSecret - eBay client secret
- * @param environment - sandbox or production
- * @returns New token data or null if refresh failed
  */
 export async function refreshEbayToken(
   refreshToken: string,
@@ -201,9 +130,7 @@ export async function refreshEbayToken(
   expires_at: number;
 } | null> {
   const endpoints = EBAY_ENDPOINTS[environment];
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
-    "base64"
-  );
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
   try {
     const response = await fetch(endpoints.token, {
@@ -227,7 +154,7 @@ export async function refreshEbayToken(
 
     return {
       access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || refreshToken, // eBay may not return new refresh token
+      refresh_token: tokens.refresh_token || refreshToken,
       expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
     };
   } catch (error) {
