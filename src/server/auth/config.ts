@@ -5,16 +5,10 @@
  * Stores user data and channel connections in the database.
  */
 import type { NextAuthConfig } from "next-auth";
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { TursoAdapter } from "./turso-adapter";
 import { db } from "@/server/db/client";
 import { EbayProvider, refreshEbayToken } from "./ebay-provider";
-import {
-  users,
-  accounts,
-  sessions,
-  verificationTokens,
-  channelConnections,
-} from "@/server/db/schema";
+import { channelConnections } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 
 /**
@@ -38,12 +32,8 @@ const protectedPaths = [
  * NextAuth configuration
  */
 export const authConfig: NextAuthConfig = {
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  }),
+  // Use custom Turso adapter that handles libsql's async HTTP client properly
+  adapter: TursoAdapter(),
 
   providers: [
     EbayProvider({
