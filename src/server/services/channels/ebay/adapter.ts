@@ -128,6 +128,74 @@ interface EbayOrderResponse {
   limit: number;
 }
 
+// ============ INVENTORY TYPES ============
+
+interface EbayInventoryItemsResponse {
+  inventoryItems: Array<{
+    sku: string;
+    locale: string;
+    product: {
+      title: string;
+      description: string;
+      imageUrls?: string[];
+      aspects?: Record<string, string[]>;
+    };
+    condition: string;
+    conditionDescription?: string;
+    availability: {
+      shipToLocationAvailability: {
+        quantity: number;
+      };
+    };
+  }>;
+  total: number;
+  size: number;
+  offset: number;
+  limit: number;
+  next?: string;
+}
+
+interface EbayOffersResponse {
+  offers: Array<{
+    offerId: string;
+    sku: string;
+    marketplaceId: string;
+    format: string;
+    availableQuantity: number;
+    categoryId?: string;
+    listingId?: string;
+    status: string;
+    pricingSummary: {
+      price: {
+        value: string;
+        currency: string;
+      };
+    };
+  }>;
+  total: number;
+  size: number;
+  offset: number;
+  limit: number;
+  next?: string;
+}
+
+/**
+ * Inventory item data returned from syncInventory
+ */
+export interface EbayInventoryItemData {
+  sku: string;
+  title: string;
+  description: string;
+  condition: string;
+  quantity: number;
+  imageUrls: string[];
+  aspects?: Record<string, string[]>;
+  price?: number;
+  listingId?: string;
+  offerId?: string;
+  offerStatus?: string;
+}
+
 // ============ EBAY ADAPTER ============
 
 export class EbayAdapter implements ChannelAdapter {
@@ -490,6 +558,119 @@ export class EbayAdapter implements ChannelAdapter {
     } catch (error) {
       console.error("[EbayAdapter] Order sync failed:", error);
       return [];
+    }
+  }
+
+  /**
+   * Sync inventory items from eBay Inventory API
+   * Fetches all inventory items and their associated offers (for pricing)
+   */
+  async syncInventory(userId: string): Promise<EbayInventoryItemData[]> {
+    const allItems: EbayInventoryItemData[] = [];
+    let offset = 0;
+    const limit = 100; // eBay max is 200, we use 100 for safety
+    let hasMore = true;
+
+    try {
+      // Step 1: Fetch all inventory items with pagination
+      while (hasMore) {
+        console.log(`[EbayAdapter] Fetching inventory items, offset: ${offset}`);
+
+        const response = await this.client.request<EbayInventoryItemsResponse>(userId, {
+          method: "GET",
+          path: `/inventory_item?limit=${limit}&offset=${offset}`,
+        });
+
+        if (!response.inventoryItems || response.inventoryItems.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        // Map inventory items
+        for (const item of response.inventoryItems) {
+          allItems.push({
+            sku: item.sku,
+            title: item.product.title,
+            description: item.product.description,
+            condition: item.condition,
+            quantity: item.availability.shipToLocationAvailability.quantity,
+            imageUrls: item.product.imageUrls ?? [],
+            aspects: item.product.aspects,
+          });
+        }
+
+        offset += response.inventoryItems.length;
+
+        // Check if there are more items
+        if (!response.next || response.inventoryItems.length < limit) {
+          hasMore = false;
+        }
+      }
+
+      console.log(`[EbayAdapter] Fetched ${allItems.length} inventory items`);
+
+      // If no inventory items, return early
+      if (allItems.length === 0) {
+        return allItems;
+      }
+
+      // Step 2: Fetch all offers to get pricing and listing IDs
+      const offersMap = new Map<string, {
+        price: number;
+        listingId?: string;
+        offerId: string;
+        offerStatus: string;
+      }>();
+
+      offset = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        console.log(`[EbayAdapter] Fetching offers, offset: ${offset}`);
+
+        const offersResponse = await this.client.request<EbayOffersResponse>(userId, {
+          method: "GET",
+          path: `/offer?limit=${limit}&offset=${offset}`,
+        });
+
+        if (!offersResponse.offers || offersResponse.offers.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        for (const offer of offersResponse.offers) {
+          offersMap.set(offer.sku, {
+            price: parseFloat(offer.pricingSummary.price.value),
+            listingId: offer.listingId,
+            offerId: offer.offerId,
+            offerStatus: offer.status,
+          });
+        }
+
+        offset += offersResponse.offers.length;
+
+        if (!offersResponse.next || offersResponse.offers.length < limit) {
+          hasMore = false;
+        }
+      }
+
+      console.log(`[EbayAdapter] Fetched ${offersMap.size} offers`);
+
+      // Step 3: Merge offer data into inventory items
+      for (const item of allItems) {
+        const offerData = offersMap.get(item.sku);
+        if (offerData) {
+          item.price = offerData.price;
+          item.listingId = offerData.listingId;
+          item.offerId = offerData.offerId;
+          item.offerStatus = offerData.offerStatus;
+        }
+      }
+
+      return allItems;
+    } catch (error) {
+      console.error("[EbayAdapter] Inventory sync failed:", error);
+      throw error;
     }
   }
 

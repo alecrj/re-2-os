@@ -394,4 +394,225 @@ describe("EbayAdapter", () => {
       expect(url).toContain("response_type=code");
     });
   });
+
+  describe("syncInventory", () => {
+    it("should fetch inventory items and offers with pagination", async () => {
+      // Mock inventory items response (page 1)
+      mockClient.request
+        .mockResolvedValueOnce({
+          inventoryItems: [
+            {
+              sku: "SKU-001",
+              locale: "en_US",
+              product: {
+                title: "Test Item 1",
+                description: "Description 1",
+                imageUrls: ["https://example.com/img1.jpg"],
+                aspects: { Brand: ["Nike"], Size: ["10"] },
+              },
+              condition: "NEW",
+              availability: {
+                shipToLocationAvailability: { quantity: 5 },
+              },
+            },
+            {
+              sku: "SKU-002",
+              locale: "en_US",
+              product: {
+                title: "Test Item 2",
+                description: "Description 2",
+                imageUrls: ["https://example.com/img2.jpg"],
+              },
+              condition: "USED_GOOD",
+              availability: {
+                shipToLocationAvailability: { quantity: 1 },
+              },
+            },
+          ],
+          total: 2,
+          size: 2,
+          offset: 0,
+          limit: 100,
+        })
+        // Mock offers response
+        .mockResolvedValueOnce({
+          offers: [
+            {
+              offerId: "offer-001",
+              sku: "SKU-001",
+              marketplaceId: "EBAY_US",
+              format: "FIXED_PRICE",
+              availableQuantity: 5,
+              listingId: "listing-001",
+              status: "PUBLISHED",
+              pricingSummary: {
+                price: { value: "49.99", currency: "USD" },
+              },
+            },
+            {
+              offerId: "offer-002",
+              sku: "SKU-002",
+              marketplaceId: "EBAY_US",
+              format: "FIXED_PRICE",
+              availableQuantity: 1,
+              listingId: "listing-002",
+              status: "PUBLISHED",
+              pricingSummary: {
+                price: { value: "29.99", currency: "USD" },
+              },
+            },
+          ],
+          total: 2,
+          size: 2,
+          offset: 0,
+          limit: 100,
+        });
+
+      const items = await adapter.syncInventory(testUserId);
+
+      expect(items).toHaveLength(2);
+
+      // Check first item
+      expect(items[0]).toMatchObject({
+        sku: "SKU-001",
+        title: "Test Item 1",
+        description: "Description 1",
+        condition: "NEW",
+        quantity: 5,
+        price: 49.99,
+        listingId: "listing-001",
+        offerId: "offer-001",
+        offerStatus: "PUBLISHED",
+      });
+      expect(items[0].imageUrls).toContain("https://example.com/img1.jpg");
+      expect(items[0].aspects).toEqual({ Brand: ["Nike"], Size: ["10"] });
+
+      // Check second item
+      expect(items[1]).toMatchObject({
+        sku: "SKU-002",
+        title: "Test Item 2",
+        price: 29.99,
+        condition: "USED_GOOD",
+      });
+    });
+
+    it("should handle items without offers", async () => {
+      mockClient.request
+        // Inventory items
+        .mockResolvedValueOnce({
+          inventoryItems: [
+            {
+              sku: "SKU-DRAFT",
+              locale: "en_US",
+              product: {
+                title: "Draft Item",
+                description: "Not published yet",
+                imageUrls: [],
+              },
+              condition: "NEW",
+              availability: {
+                shipToLocationAvailability: { quantity: 1 },
+              },
+            },
+          ],
+          total: 1,
+          size: 1,
+          offset: 0,
+          limit: 100,
+        })
+        // Empty offers
+        .mockResolvedValueOnce({
+          offers: [],
+          total: 0,
+          size: 0,
+          offset: 0,
+          limit: 100,
+        });
+
+      const items = await adapter.syncInventory(testUserId);
+
+      expect(items).toHaveLength(1);
+      expect(items[0].sku).toBe("SKU-DRAFT");
+      expect(items[0].price).toBeUndefined();
+      expect(items[0].listingId).toBeUndefined();
+    });
+
+    it("should handle pagination for large inventories", async () => {
+      // First page of inventory items
+      mockClient.request
+        .mockResolvedValueOnce({
+          inventoryItems: Array(100).fill(null).map((_, i) => ({
+            sku: `SKU-${i}`,
+            locale: "en_US",
+            product: {
+              title: `Item ${i}`,
+              description: `Description ${i}`,
+              imageUrls: [],
+            },
+            condition: "NEW",
+            availability: { shipToLocationAvailability: { quantity: 1 } },
+          })),
+          total: 150,
+          size: 100,
+          offset: 0,
+          limit: 100,
+          next: "https://api.ebay.com/sell/inventory/v1/inventory_item?offset=100",
+        })
+        // Second page of inventory items
+        .mockResolvedValueOnce({
+          inventoryItems: Array(50).fill(null).map((_, i) => ({
+            sku: `SKU-${100 + i}`,
+            locale: "en_US",
+            product: {
+              title: `Item ${100 + i}`,
+              description: `Description ${100 + i}`,
+              imageUrls: [],
+            },
+            condition: "NEW",
+            availability: { shipToLocationAvailability: { quantity: 1 } },
+          })),
+          total: 150,
+          size: 50,
+          offset: 100,
+          limit: 100,
+        })
+        // First page of offers
+        .mockResolvedValueOnce({
+          offers: [],
+          total: 0,
+          size: 0,
+          offset: 0,
+          limit: 100,
+        });
+
+      const items = await adapter.syncInventory(testUserId);
+
+      expect(items).toHaveLength(150);
+      expect(items[0].sku).toBe("SKU-0");
+      expect(items[149].sku).toBe("SKU-149");
+    });
+
+    it("should throw error on API failure", async () => {
+      mockClient.request.mockRejectedValueOnce(new Error("API Error"));
+
+      await expect(adapter.syncInventory(testUserId)).rejects.toThrow("API Error");
+    });
+
+    it("should return empty array when no inventory items", async () => {
+      // When there are no inventory items, we skip fetching offers
+      mockClient.request.mockResolvedValueOnce({
+        inventoryItems: [],
+        total: 0,
+        size: 0,
+        offset: 0,
+        limit: 100,
+      });
+
+      const items = await adapter.syncInventory(testUserId);
+
+      expect(items).toEqual([]);
+      // Should only call request once (no offers fetch needed)
+      expect(mockClient.request).toHaveBeenCalledTimes(1);
+    });
+  });
 });

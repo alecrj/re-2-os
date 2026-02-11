@@ -1,9 +1,9 @@
 # implementer Progress
 
 ## Current Assignment
-- **Subtask**: None
-- **Status**: ⏳ Waiting
-- **Started**: -
+- **Subtask**: T-209 Sync Inventory FROM eBay
+- **Status**: 🔄 Active
+- **Started**: 2026-02-11
 
 ## Completed Work
 | Subtask | Completed | Validated |

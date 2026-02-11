@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Package, Plus } from "lucide-react";
+import { Package, Plus, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,7 +15,22 @@ import { InventoryTable } from "@/components/inventory";
 import { trpc } from "@/lib/trpc/client";
 
 export default function InventoryPage() {
+  const utils = trpc.useUtils();
   const { data: stats, isLoading: statsLoading } = trpc.inventory.getStats.useQuery();
+
+  // Sync from eBay mutation
+  const syncMutation = trpc.inventory.syncFromEbay.useMutation({
+    onSuccess: (data) => {
+      utils.inventory.list.invalidate();
+      utils.inventory.getStats.invalidate();
+      // TODO: Show success toast with sync results
+      console.log(`Synced ${data.synced} items (${data.created} created, ${data.updated} updated)`);
+    },
+    onError: (error) => {
+      // TODO: Show error toast
+      console.error("Sync failed:", error.message);
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -27,12 +42,26 @@ export default function InventoryPage() {
             Manage your items and create new listings
           </p>
         </div>
-        <Button asChild>
-          <Link href="/inventory/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Listing
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+          >
+            {syncMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Sync from eBay
+          </Button>
+          <Button asChild>
+            <Link href="/inventory/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Listing
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
