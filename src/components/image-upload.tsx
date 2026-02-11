@@ -169,7 +169,7 @@ export function ImageUpload({
       const newImage: UploadedImage = {
         id: result.id,
         originalUrl: publicUrl,
-        position: result.position,
+        position: result.position ?? images.length,
         width: result.width,
         height: result.height,
         sizeBytes: result.sizeBytes,

@@ -45,3 +45,4 @@ data/*.db-wal
 
 # TypeScript build cache
 tsconfig.tsbuildinfo
+.env.production

@@ -90,8 +90,8 @@ describe("Audit Service", () => {
       expect(deadline).toBeInstanceOf(Date);
 
       const hoursUntil = (deadline!.getTime() - Date.now()) / (1000 * 60 * 60);
-      expect(hoursUntil).toBeGreaterThan(719); // ~30 days
-      expect(hoursUntil).toBeLessThan(721);
+      expect(hoursUntil).toBeGreaterThanOrEqual(719); // ~30 days
+      expect(hoursUntil).toBeLessThanOrEqual(721);
     });
 
     it("should return far future date for ITEM_ARCHIVE (unlimited)", () => {

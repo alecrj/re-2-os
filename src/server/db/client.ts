@@ -1,29 +1,40 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle as drizzleSqlite, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { drizzle as drizzleLibsql } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
 import Database from "better-sqlite3";
 import * as schema from "./schema";
 
-// Determine database path from environment or use default
-const getDatabasePath = (): string => {
-  const url = process.env.DATABASE_URL || "file:./data/reselleros.db";
+// Determine if we're using Turso (libsql) or local SQLite
+const isTurso = process.env.DATABASE_URL?.startsWith("libsql://");
 
-  // Handle file: prefix for SQLite
-  if (url.startsWith("file:")) {
-    return url.slice(5);
-  }
+// Create the appropriate database connection
+// We use BetterSQLite3Database as the type since both drivers have compatible query APIs
+let db: BetterSQLite3Database<typeof schema>;
 
-  // If it's a Turso URL, we'd need different handling
-  // For now, assume local SQLite
-  return url;
-};
+if (isTurso) {
+  // Turso / libsql for production
+  const client = createClient({
+    url: process.env.DATABASE_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
+  // Cast to the sqlite type - the APIs are compatible
+  db = drizzleLibsql(client, { schema }) as unknown as BetterSQLite3Database<typeof schema>;
+} else {
+  // Local SQLite for development
+  const getDatabasePath = (): string => {
+    const url = process.env.DATABASE_URL || "file:./data/reselleros.db";
+    if (url.startsWith("file:")) {
+      return url.slice(5);
+    }
+    return url;
+  };
 
-// Create SQLite database connection
-const sqlite = new Database(getDatabasePath());
+  const sqlite = new Database(getDatabasePath());
+  sqlite.pragma("journal_mode = WAL");
+  db = drizzleSqlite(sqlite, { schema });
+}
 
-// Enable WAL mode for better concurrent read performance
-sqlite.pragma("journal_mode = WAL");
+export { db };
 
-// Create Drizzle ORM instance with schema
-export const db = drizzle(sqlite, { schema });
-
-// Export types for use in other files
-export type Database = typeof db;
+// Export database type
+export type { BetterSQLite3Database as Database };
