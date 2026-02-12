@@ -160,7 +160,7 @@ export function ListingsTable({
               onStatusFilter?.(value as ListingStatus | "all")
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-11 md:h-9">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -181,7 +181,7 @@ export function ListingsTable({
               onChannelFilter?.(value as Channel | "all")
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-11 md:h-9">
               <SelectValue placeholder="Filter by channel" />
             </SelectTrigger>
             <SelectContent>
@@ -195,8 +195,8 @@ export function ListingsTable({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
+      {/* Desktop Table */}
+      <div className="rounded-md border hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -275,6 +275,70 @@ export function ListingsTable({
             ))}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {listings.map((listing) => (
+          <div
+            key={listing.id}
+            className="rounded-lg border p-4"
+          >
+            <div className="flex gap-3">
+              {listing.item?.imageUrl ? (
+                <Image
+                  src={listing.item.imageUrl}
+                  alt={listing.item.title}
+                  className="h-14 w-14 rounded object-cover flex-shrink-0"
+                  width={56}
+                  height={56}
+                  unoptimized
+                />
+              ) : (
+                <div className="h-14 w-14 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <Tags className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium line-clamp-2 text-sm">
+                    {listing.item?.title ?? "Unknown Item"}
+                  </p>
+                  <span className="font-semibold text-sm whitespace-nowrap">
+                    {formatCurrency(listing.price)}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {CHANNEL_NAMES[listing.channel]} &middot;{" "}
+                  {listing.publishedAt
+                    ? formatDistanceToNow(new Date(listing.publishedAt), {
+                        addSuffix: true,
+                      })
+                    : listing.createdAt
+                      ? formatDistanceToNow(new Date(listing.createdAt), {
+                          addSuffix: true,
+                        })
+                      : "-"}
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <Badge variant={getStatusBadgeVariant(listing.status)}>
+                    {getStatusLabel(listing.status)}
+                  </Badge>
+                  {listing.externalUrl && (
+                    <a
+                      href={listing.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Pagination */}

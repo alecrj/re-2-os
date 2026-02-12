@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuditLog } from "@/components/audit/audit-log";
 import { NotificationPreferences } from "@/components/settings/notification-preferences";
+import { ConnectedChannels } from "@/components/settings/connected-channels";
 
 export default function SettingsPage() {
   return (
@@ -66,23 +67,8 @@ export default function SettingsPage() {
                   Connect your marketplace accounts
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span>eBay</span>
-                  <Button size="sm">Connect</Button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Poshmark</span>
-                  <Button size="sm" variant="outline" disabled>
-                    Assisted
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Mercari</span>
-                  <Button size="sm" variant="outline" disabled>
-                    Assisted
-                  </Button>
-                </div>
+              <CardContent>
+                <ConnectedChannels />
               </CardContent>
             </Card>
 

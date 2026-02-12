@@ -167,7 +167,7 @@ export function OrdersTable({
               onStatusFilter?.(value as OrderStatus | "all")
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-11 md:h-9">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -188,7 +188,7 @@ export function OrdersTable({
               onChannelFilter?.(value as Channel | "all")
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-11 md:h-9">
               <SelectValue placeholder="Filter by channel" />
             </SelectTrigger>
             <SelectContent>
@@ -202,8 +202,8 @@ export function OrdersTable({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
+      {/* Desktop Table */}
+      <div className="rounded-md border hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -286,6 +286,64 @@ export function OrdersTable({
             ))}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {orders.map((order) => (
+          <div
+            key={order.id}
+            className="rounded-lg border p-4 cursor-pointer active:bg-muted/50"
+            onClick={() => onOrderClick?.(order)}
+          >
+            <div className="flex gap-3">
+              {order.item?.imageUrl ? (
+                <Image
+                  src={order.item.imageUrl}
+                  alt={order.item.title}
+                  className="h-14 w-14 rounded object-cover flex-shrink-0"
+                  width={56}
+                  height={56}
+                  unoptimized
+                />
+              ) : (
+                <div className="h-14 w-14 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <Package className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium line-clamp-2 text-sm">
+                    {order.item?.title ?? "Unknown Item"}
+                  </p>
+                  <span className="font-semibold text-sm whitespace-nowrap">
+                    {formatCurrency(order.salePrice)}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {CHANNEL_NAMES[order.channel]} &middot;{" "}
+                  {formatDistanceToNow(new Date(order.orderedAt), {
+                    addSuffix: true,
+                  })}
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <Badge variant={getStatusBadgeVariant(order.status)}>
+                    {getStatusLabel(order.status)}
+                  </Badge>
+                  <span
+                    className={`text-sm font-medium ${
+                      (order.netProfit ?? 0) >= 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {formatCurrency(order.netProfit)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Pagination */}

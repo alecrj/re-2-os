@@ -45,6 +45,7 @@ export default function InventoryPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            className="h-11 md:h-9"
             onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending}
           >
@@ -55,7 +56,7 @@ export default function InventoryPage() {
             )}
             Sync from eBay
           </Button>
-          <Button asChild>
+          <Button asChild className="h-11 md:h-9">
             <Link href="/inventory/new">
               <Plus className="mr-2 h-4 w-4" />
               New Listing

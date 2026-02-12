@@ -154,6 +154,7 @@ export default function OrdersPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            className="h-11 md:h-9"
             onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending}
           >
@@ -164,7 +165,7 @@ export default function OrdersPage() {
             )}
             Sync from eBay
           </Button>
-          <Button onClick={() => setIsRecordSaleOpen(true)}>
+          <Button className="h-11 md:h-9" onClick={() => setIsRecordSaleOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Record Sale
           </Button>

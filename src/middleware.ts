@@ -38,7 +38,7 @@ export default auth((req) => {
 
   // Redirect authenticated users from auth pages to dashboard
   if (isAuthPath && isLoggedIn) {
-    return NextResponse.redirect(new URL("/inventory", nextUrl.origin));
+    return NextResponse.redirect(new URL("/dashboard", nextUrl.origin));
   }
 
   return NextResponse.next();

@@ -10,6 +10,7 @@ import type { NextAuthConfig } from "next-auth";
  * Protected paths that require authentication
  */
 export const protectedPaths = [
+  "/dashboard",
   "/inventory",
   "/listings",
   "/orders",

@@ -204,14 +204,14 @@ export function InventoryTable({ className }: InventoryTableProps) {
               placeholder="Search items..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 w-[200px] sm:w-[300px]"
+              className="pl-8 w-[200px] sm:w-[300px] h-11 md:h-9"
             />
           </div>
           <Select
             value={statusFilter}
             onValueChange={(value) => setStatusFilter(value as StatusFilter)}
           >
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-[130px] h-11 md:h-9">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -229,7 +229,7 @@ export function InventoryTable({ className }: InventoryTableProps) {
               placeholder="Filter by location..."
               value={locationQuery}
               onChange={(e) => setLocationQuery(e.target.value)}
-              className="pl-8 w-[180px]"
+              className="pl-8 w-[180px] h-11 md:h-9"
             />
           </div>
         </div>
@@ -269,8 +269,8 @@ export function InventoryTable({ className }: InventoryTableProps) {
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-md border">
+      {/* Desktop Table */}
+      <div className="rounded-md border hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -530,6 +530,101 @@ export function InventoryTable({ className }: InventoryTableProps) {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-lg border p-4">
+              <div className="flex gap-3">
+                <Skeleton className="h-14 w-14 rounded" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-5 w-16" />
+                </div>
+              </div>
+            </div>
+          ))
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-8">
+            <Package className="h-8 w-8 text-muted-foreground" />
+            <p className="text-muted-foreground">No items found</p>
+            {(searchQuery || statusFilter !== "all" || locationQuery) && (
+              <Button
+                variant="link"
+                onClick={() => {
+                  setSearchQuery("");
+                  setStatusFilter("all");
+                  setLocationQuery("");
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
+        ) : (
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          items.map((item: any) => (
+            <div
+              key={item.id}
+              className="rounded-lg border p-4 cursor-pointer active:bg-muted/50"
+              onClick={() => router.push(`/inventory/${item.id}`)}
+            >
+              <div className="flex gap-3">
+                {item.imageUrl ? (
+                  <Image
+                    src={item.imageUrl}
+                    alt={item.title}
+                    className="h-14 w-14 rounded object-cover flex-shrink-0"
+                    width={56}
+                    height={56}
+                    unoptimized
+                  />
+                ) : (
+                  <div className="h-14 w-14 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                    <Package className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium line-clamp-2 text-sm">{item.title}</p>
+                    <span className="font-semibold text-sm whitespace-nowrap">
+                      {formatPrice(item.askingPrice)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{item.sku}</p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <Badge
+                      variant="secondary"
+                      className={cn("capitalize text-xs", statusColors[item.status])}
+                    >
+                      {item.status}
+                    </Badge>
+                    {item.shipReady && (
+                      <PackageCheck className="h-4 w-4 text-green-600" />
+                    )}
+                    {item.channels.length > 0 &&
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      item.channels.map((channel: any) => (
+                        <Badge
+                          key={channel.channel}
+                          variant="secondary"
+                          className={cn(
+                            "text-xs capitalize",
+                            channelColors[channel.channel]
+                          )}
+                        >
+                          {channel.channel}
+                        </Badge>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Pagination */}

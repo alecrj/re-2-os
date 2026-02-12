@@ -5,6 +5,8 @@
  * Stores user data and channel connections in the database.
  */
 import type { NextAuthConfig } from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
+import AppleProvider from "next-auth/providers/apple";
 import { TursoAdapter } from "./turso-adapter";
 import { db } from "@/server/db/client";
 import { EbayProvider, refreshEbayToken } from "./ebay-provider";
@@ -21,6 +23,7 @@ const ebayEnvironment =
  * Protected paths that require authentication
  */
 const protectedPaths = [
+  "/dashboard",
   "/inventory",
   "/listings",
   "/orders",
@@ -36,6 +39,14 @@ export const authConfig: NextAuthConfig = {
   adapter: TursoAdapter(),
 
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+    AppleProvider({
+      clientId: process.env.APPLE_ID!,
+      clientSecret: process.env.APPLE_SECRET!,
+    }),
     EbayProvider({
       clientId: process.env.EBAY_CLIENT_ID!,
       clientSecret: process.env.EBAY_CLIENT_SECRET!,
@@ -65,45 +76,46 @@ export const authConfig: NextAuthConfig = {
     async jwt({ token, user, account }) {
       // Initial sign in
       if (account && user) {
-        // Store the eBay tokens in the JWT
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at;
         token.userId = user.id;
         token.provider = account.provider;
 
-        // Also store/update the channel connection
-        await syncChannelConnection(user.id, account);
+        // Only store OAuth tokens for eBay (Google/Apple are login-only)
+        if (account.provider === "ebay") {
+          token.accessToken = account.access_token;
+          token.refreshToken = account.refresh_token;
+          token.expiresAt = account.expires_at;
+          await syncChannelConnection(user.id, account);
+        }
       }
 
-      // Check if token needs refresh (5 minute buffer)
-      const shouldRefresh =
-        token.expiresAt && Date.now() / 1000 > (token.expiresAt as number) - 300;
+      // eBay token refresh (5 minute buffer)
+      if (token.provider === "ebay") {
+        const shouldRefresh =
+          token.expiresAt && Date.now() / 1000 > (token.expiresAt as number) - 300;
 
-      if (shouldRefresh && token.refreshToken && token.provider === "ebay") {
-        const refreshed = await refreshEbayToken(
-          token.refreshToken as string,
-          process.env.EBAY_CLIENT_ID!,
-          process.env.EBAY_CLIENT_SECRET!,
-          ebayEnvironment
-        );
+        if (shouldRefresh && token.refreshToken) {
+          const refreshed = await refreshEbayToken(
+            token.refreshToken as string,
+            process.env.EBAY_CLIENT_ID!,
+            process.env.EBAY_CLIENT_SECRET!,
+            ebayEnvironment
+          );
 
-        if (refreshed) {
-          token.accessToken = refreshed.access_token;
-          token.refreshToken = refreshed.refresh_token;
-          token.expiresAt = refreshed.expires_at;
+          if (refreshed) {
+            token.accessToken = refreshed.access_token;
+            token.refreshToken = refreshed.refresh_token;
+            token.expiresAt = refreshed.expires_at;
 
-          // Update the channel connection with new tokens
-          if (token.userId) {
-            await updateChannelTokens(
-              token.userId as string,
-              "ebay",
-              refreshed
-            );
+            if (token.userId) {
+              await updateChannelTokens(
+                token.userId as string,
+                "ebay",
+                refreshed
+              );
+            }
+          } else {
+            token.error = "RefreshTokenError";
           }
-        } else {
-          // Token refresh failed - mark as expired
-          token.error = "RefreshTokenError";
         }
       }
 
