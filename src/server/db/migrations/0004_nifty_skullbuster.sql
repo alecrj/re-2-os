@@ -1,0 +1,1 @@
+ALTER TABLE `inventory_items` ADD `ship_ready` integer DEFAULT false NOT NULL;

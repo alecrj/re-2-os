@@ -41,7 +41,7 @@
 | T-205 | Delist from eBay | DONE | implementer | Quantity-based |
 | T-206 | Sync Orders from eBay | DONE | implementer | Fulfillment API |
 | T-207 | eBay Platform Notifications | DONE | implementer | Webhook endpoint |
-| T-208 | eBay Trading API (Offers) | TODO | implementer | RespondToBestOffer needed |
+| T-208 | eBay Trading API (Offers) | DONE | implementer | RespondToBestOffer via Trading API |
 | T-209 | Sync Inventory FROM eBay | DONE | implementer | Import existing listings |
 
 ---
@@ -57,7 +57,7 @@
 | T-304 | Inventory Detail Page | DONE | implementer | Edit form |
 | T-305 | Create New Item Flow | DONE | implementer | Multi-step wizard |
 | T-306 | Image Upload Component | DONE | implementer | R2 integration |
-| T-307 | Bulk Operations | TODO | implementer | Multi-select actions |
+| T-307 | Bulk Operations | DONE | implementer | Multi-select actions |
 
 ---
 
@@ -87,12 +87,12 @@
 | T-504 | Auto-Accept Logic | DONE | autopilot-engineer | Threshold rules |
 | T-505 | Auto-Decline Logic | DONE | autopilot-engineer | Lowball detection |
 | T-506 | Counter-Offer Logic | DONE | autopilot-engineer | Smart counters |
-| T-507 | Execute Offer Response | TODO | implementer | Needs T-208 |
+| T-507 | Execute Offer Response | DONE | implementer | Wired to Trading API |
 | T-508 | Delist-on-Sale Function | DONE | implementer | Inngest job |
 | T-509 | Reprice Check Function | DONE | implementer | Time-decay |
 | T-510 | Stale Listing Check | DONE | implementer | Inngest job |
 | T-511 | Pending Actions Queue | DONE | implementer | UI component |
-| T-512 | Autopilot Settings UI | TODO | implementer | Config page |
+| T-512 | Autopilot Settings UI | DONE | implementer | Config page |
 | T-513 | Rate Limiting | DONE | implementer | Daily caps |
 
 ---
@@ -102,12 +102,12 @@
 
 | ID | Title | Status | Owner | Notes |
 |----|-------|--------|-------|-------|
-| T-601 | Listings Page UI | TODO | implementer | Needs data queries |
+| T-601 | Listings Page UI | DONE | implementer | Table + filters + stats |
 | T-602 | Channel Listings Schema | DONE | implementer | DB tables |
 | T-603 | Cross-List Dialog | DONE | implementer | UI component |
-| T-604 | Cross-List Template Gen | TODO | implementer | For assisted channels |
+| T-604 | Cross-List Template Gen | DONE | implementer | Template generation + copy UI |
 | T-605 | Publish Flow (eBay) | DONE | implementer | End-to-end |
-| T-606 | Publish Flow (Assisted) | TODO | implementer | Template + tracking |
+| T-606 | Publish Flow (Assisted) | DONE | implementer | Template + tracking |
 
 ---
 
@@ -118,9 +118,9 @@
 |----|-------|--------|-------|-------|
 | T-701 | OpenAI Client Setup | DONE | implementer | API configured |
 | T-702 | AI Listing Generation | DONE | implementer | tRPC endpoint |
-| T-703 | Background Removal | TODO | implementer | R2 processing |
+| T-703 | Background Removal | DONE | implementer | OpenAI + R2 processing |
 | T-704 | Category Suggestion | DONE | implementer | From images |
-| T-705 | Price Suggestion | TODO | implementer | Market analysis |
+| T-705 | Price Suggestion | DONE | implementer | GPT-4o market analysis |
 
 ---
 
@@ -130,10 +130,10 @@
 | ID | Title | Status | Owner | Notes |
 |----|-------|--------|-------|-------|
 | T-801 | Analytics tRPC Router | DONE | implementer | Basic queries |
-| T-802 | Analytics Page UI | TODO | implementer | Empty page |
-| T-803 | Revenue Chart | TODO | implementer | Time series |
-| T-804 | Channel Performance | TODO | implementer | Comparison |
-| T-805 | Top Items Report | TODO | implementer | Best sellers |
+| T-802 | Analytics Page UI | DONE | implementer | Full dashboard |
+| T-803 | Revenue Chart | DONE | implementer | Recharts time series |
+| T-804 | Channel Performance | DONE | implementer | Pie + bar charts |
+| T-805 | Top Items Report | DONE | implementer | Sortable best sellers |
 | T-806 | Export to CSV | DONE | implementer | Reports |
 
 ---
@@ -144,28 +144,29 @@
 | ID | Title | Status | Owner | Notes |
 |----|-------|--------|-------|-------|
 | T-901 | Settings Page Layout | DONE | implementer | Basic page |
-| T-902 | Autopilot Config UI | TODO | implementer | Rules editor |
+| T-902 | Autopilot Config UI | DONE | implementer | Rules editor + reprice config |
 | T-903 | Channel Connections | DONE | implementer | eBay linked |
-| T-904 | Notification Prefs | TODO | implementer | Email/push |
+| T-904 | Notification Prefs | DONE | implementer | Per-category toggles |
+
+---
+
+## Epic 10: Storage & Organization
+*Physical inventory location tracking for efficient fulfillment*
+
+| ID | Title | Status | Owner | Notes |
+|----|-------|--------|-------|-------|
+| T-1001 | Storage Location Schema | DONE | implementer | storage_location, bin, shelf + index |
+| T-1002 | Storage Location UI | DONE | implementer | Edit on item detail page |
+| T-1003 | Ship-Ready Status | DONE | implementer | Toggle + PackageCheck indicator |
+| T-1004 | Quick Lookup by Location | DONE | implementer | Filter/search by bin/shelf |
+| T-1005 | Sold Item Location Alert | DONE | implementer | Find This Item card on orders |
 
 ---
 
 ## Priority Queue (Next Up)
 
-### P0 - Critical Path
-1. ~~**T-209**: Sync Inventory FROM eBay - Import existing listings~~ ✅ DONE
-2. **T-601**: Listings Page UI - Show active listings
-3. **T-208**: eBay Trading API - Enable offer responses
-
-### P1 - Core Features
-4. **T-507**: Execute Offer Response - Wire up autopilot
-5. **T-512**: Autopilot Settings UI - Configure rules
-6. **T-802**: Analytics Page UI - Basic dashboard
-
-### P2 - Polish
-7. **T-307**: Bulk Operations
-8. **T-604**: Cross-List Templates
-9. **T-803-805**: Analytics charts
+### ✅ ALL PRIORITIES COMPLETE
+All P0-P3 tasks completed in sprints 2026-02-11/12.
 
 ---
 
@@ -174,15 +175,16 @@
 | Epic | Done | Total | % |
 |------|------|-------|---|
 | 1. Core Infrastructure | 7 | 7 | 100% |
-| 2. eBay Integration | 8 | 9 | 89% |
-| 3. Inventory Management | 6 | 7 | 86% |
+| 2. eBay Integration | 9 | 9 | 100% |
+| 3. Inventory Management | 7 | 7 | 100% |
 | 4. Orders & Sales | 7 | 7 | 100% |
-| 5. Autopilot Engine | 10 | 13 | 77% |
-| 6. Listings & Cross-List | 3 | 6 | 50% |
-| 7. AI Features | 3 | 5 | 60% |
-| 8. Analytics Dashboard | 2 | 6 | 33% |
-| 9. Settings & Config | 2 | 4 | 50% |
-| **TOTAL** | **48** | **64** | **75%** |
+| 5. Autopilot Engine | 13 | 13 | 100% |
+| 6. Listings & Cross-List | 6 | 6 | 100% |
+| 7. AI Features | 5 | 5 | 100% |
+| 8. Analytics Dashboard | 6 | 6 | 100% |
+| 9. Settings & Config | 4 | 4 | 100% |
+| 10. Storage & Organization | 5 | 5 | 100% |
+| **TOTAL** | **69** | **69** | **100%** |
 
 ---
 

@@ -8,6 +8,7 @@ import { analyticsRouter } from "./routers/analytics";
 import { imagesRouter } from "./routers/images";
 import { aiRouter } from "./routers/ai";
 import { auditRouter } from "./routers/audit";
+import { settingsRouter } from "./routers/settings";
 
 /**
  * This is the primary router for the server.
@@ -24,6 +25,7 @@ export const appRouter = createTRPCRouter({
   images: imagesRouter,
   ai: aiRouter,
   audit: auditRouter,
+  settings: settingsRouter,
 });
 
 // Export type definition of API

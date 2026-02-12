@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { db } from "@/server/db/client";
 import { inventoryItems, itemImages, channelListings } from "@/server/db/schema";
-import { eq, and, desc, like, inArray, count } from "drizzle-orm";
+import { eq, and, or, desc, like, inArray, count } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getEbayAdapter, type EbayInventoryItemData } from "@/server/services/channels/ebay";
 
@@ -50,6 +50,7 @@ export const inventoryRouter = createTRPCRouter({
         status: statusEnum.optional(),
         channel: z.enum(["ebay", "poshmark", "mercari", "depop"]).optional(),
         search: z.string().optional(),
+        location: z.string().optional(),
         limit: z.number().min(1).max(100).default(20),
         cursor: z.string().optional(),
       })
@@ -69,6 +70,17 @@ export const inventoryRouter = createTRPCRouter({
 
       if (input.search) {
         conditions.push(like(inventoryItems.title, `%${input.search}%`));
+      }
+
+      if (input.location) {
+        const locationPattern = `%${input.location}%`;
+        conditions.push(
+          or(
+            like(inventoryItems.storageLocation, locationPattern),
+            like(inventoryItems.bin, locationPattern),
+            like(inventoryItems.shelf, locationPattern),
+          )!
+        );
       }
 
       // Get items with images
@@ -107,6 +119,10 @@ export const inventoryRouter = createTRPCRouter({
           quantity: item.quantity,
           createdAt: item.createdAt,
           listedAt: item.listedAt,
+          storageLocation: item.storageLocation,
+          bin: item.bin,
+          shelf: item.shelf,
+          shipReady: item.shipReady,
           imageUrl: item.images[0]?.processedUrl || item.images[0]?.originalUrl || null,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           channels: item.channelListings.map((cl: any) => ({
@@ -165,6 +181,10 @@ export const inventoryRouter = createTRPCRouter({
         aiConfidence: item.aiConfidence,
         suggestedCategory: item.suggestedCategory,
         itemSpecifics: item.itemSpecifics,
+        storageLocation: item.storageLocation,
+        bin: item.bin,
+        shelf: item.shelf,
+        shipReady: item.shipReady,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         listedAt: item.listedAt,
@@ -264,6 +284,9 @@ export const inventoryRouter = createTRPCRouter({
         status: statusEnum.optional(),
         itemSpecifics: z.record(z.string()).nullable().optional(),
         suggestedCategory: z.string().nullable().optional(),
+        storageLocation: z.string().nullable().optional(),
+        bin: z.string().nullable().optional(),
+        shelf: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -305,6 +328,9 @@ export const inventoryRouter = createTRPCRouter({
       }
       if (updates.itemSpecifics !== undefined) updateData.itemSpecifics = updates.itemSpecifics;
       if (updates.suggestedCategory !== undefined) updateData.suggestedCategory = updates.suggestedCategory;
+      if (updates.storageLocation !== undefined) updateData.storageLocation = updates.storageLocation;
+      if (updates.bin !== undefined) updateData.bin = updates.bin;
+      if (updates.shelf !== undefined) updateData.shelf = updates.shelf;
 
       await db
         .update(inventoryItems)
@@ -388,6 +414,215 @@ export const inventoryRouter = createTRPCRouter({
     }),
 
   /**
+   * Bulk update status for multiple inventory items
+   */
+  bulkUpdateStatus: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(100),
+        status: statusEnum,
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.user.id;
+      const now = new Date();
+
+      // Build update data with appropriate timestamps
+      const updateData: Record<string, unknown> = {
+        status: input.status,
+        updatedAt: now,
+      };
+      if (input.status === "active") {
+        updateData.listedAt = now;
+      }
+      if (input.status === "sold") {
+        updateData.soldAt = now;
+      }
+
+      await db
+        .update(inventoryItems)
+        .set(updateData)
+        .where(
+          and(
+            inArray(inventoryItems.id, input.ids),
+            eq(inventoryItems.userId, userId)
+          )
+        );
+
+      return { success: true, updatedCount: input.ids.length };
+    }),
+
+  /**
+   * Bulk reprice multiple inventory items
+   * Supports fixed price, percentage adjustment, or setting floor price
+   */
+  bulkReprice: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(100),
+        mode: z.enum(["fixed", "percent_decrease", "percent_increase"]),
+        value: z.number().positive(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.user.id;
+      const now = new Date();
+
+      // Fetch the items to compute new prices
+      const items = await db
+        .select({
+          id: inventoryItems.id,
+          askingPrice: inventoryItems.askingPrice,
+          floorPrice: inventoryItems.floorPrice,
+        })
+        .from(inventoryItems)
+        .where(
+          and(
+            inArray(inventoryItems.id, input.ids),
+            eq(inventoryItems.userId, userId)
+          )
+        );
+
+      if (items.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No items found",
+        });
+      }
+
+      const results = {
+        updated: 0,
+        skipped: 0,
+        errors: [] as string[],
+      };
+
+      for (const item of items) {
+        let newPrice: number;
+
+        switch (input.mode) {
+          case "fixed":
+            newPrice = input.value;
+            break;
+          case "percent_decrease":
+            newPrice = item.askingPrice * (1 - input.value / 100);
+            break;
+          case "percent_increase":
+            newPrice = item.askingPrice * (1 + input.value / 100);
+            break;
+        }
+
+        // Round to 2 decimal places
+        newPrice = Math.round(newPrice * 100) / 100;
+
+        // Ensure price doesn't go below floor
+        if (item.floorPrice && newPrice < item.floorPrice) {
+          results.skipped++;
+          results.errors.push(
+            `Item ${item.id}: new price $${newPrice.toFixed(2)} would be below floor $${item.floorPrice.toFixed(2)}`
+          );
+          continue;
+        }
+
+        // Ensure price is positive
+        if (newPrice <= 0) {
+          results.skipped++;
+          results.errors.push(`Item ${item.id}: computed price would be <= 0`);
+          continue;
+        }
+
+        await db
+          .update(inventoryItems)
+          .set({ askingPrice: newPrice, updatedAt: now })
+          .where(eq(inventoryItems.id, item.id));
+
+        results.updated++;
+      }
+
+      return { success: true, ...results };
+    }),
+
+  /**
+   * Bulk delist items from eBay
+   * Sets the item status to draft and attempts to delist from eBay
+   */
+  bulkDelist: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(100),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.user.id;
+      const now = new Date();
+      const adapter = getEbayAdapter();
+
+      // Get all channel listings for these items
+      const listings = await db
+        .select({
+          id: channelListings.id,
+          itemId: channelListings.itemId,
+          channel: channelListings.channel,
+          externalId: channelListings.externalId,
+          status: channelListings.status,
+        })
+        .from(channelListings)
+        .where(
+          and(
+            inArray(channelListings.itemId, input.ids),
+            eq(channelListings.channel, "ebay")
+          )
+        );
+
+      const results = {
+        delisted: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      // Delist from eBay for each active listing
+      for (const listing of listings) {
+        if (listing.status !== "active" || !listing.externalId) {
+          continue;
+        }
+
+        try {
+          const delistResult = await adapter.delist(userId, listing.externalId);
+          if (delistResult.success) {
+            // Update channel listing status
+            await db
+              .update(channelListings)
+              .set({ status: "ended", endedAt: now })
+              .where(eq(channelListings.id, listing.id));
+            results.delisted++;
+          } else {
+            results.failed++;
+            results.errors.push(
+              `Failed to delist item ${listing.itemId}: ${delistResult.error}`
+            );
+          }
+        } catch (error) {
+          results.failed++;
+          results.errors.push(
+            `Error delisting item ${listing.itemId}: ${error instanceof Error ? error.message : "Unknown error"}`
+          );
+        }
+      }
+
+      // Update inventory item statuses to draft
+      await db
+        .update(inventoryItems)
+        .set({ status: "draft", updatedAt: now })
+        .where(
+          and(
+            inArray(inventoryItems.id, input.ids),
+            eq(inventoryItems.userId, userId)
+          )
+        );
+
+      return { success: true, ...results };
+    }),
+
+  /**
    * Publish item to channels (marks as active)
    */
   publish: protectedProcedure
@@ -445,6 +680,36 @@ export const inventoryRouter = createTRPCRouter({
           requiresManualAction: channel !== "ebay",
         })),
       };
+    }),
+
+  /**
+   * Toggle ship-ready status for an inventory item
+   */
+  toggleShipReady: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.user.id;
+
+      const item = await db.query.inventoryItems.findFirst({
+        where: and(
+          eq(inventoryItems.id, input.id),
+          eq(inventoryItems.userId, userId)
+        ),
+        columns: { id: true, shipReady: true },
+      });
+
+      if (!item) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
+      }
+
+      const newValue = !item.shipReady;
+
+      await db
+        .update(inventoryItems)
+        .set({ shipReady: newValue, updatedAt: new Date() })
+        .where(eq(inventoryItems.id, input.id));
+
+      return { success: true, shipReady: newValue };
     }),
 
   /**

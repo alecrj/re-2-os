@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
@@ -60,6 +61,7 @@ import {
   ExternalLink,
   DollarSign,
   RefreshCw,
+  MapPin,
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -112,6 +114,11 @@ export default function EditListingPage({ params }: EditListingPageProps) {
   const [selectedChannels, setSelectedChannels] = React.useState<ChannelId[]>([]);
   const [errors, setErrors] = React.useState<Partial<Record<keyof ListingFormData, string>>>({});
 
+  // Storage location state
+  const [storageLocation, setStorageLocation] = React.useState<string>("");
+  const [bin, setBin] = React.useState<string>("");
+  const [shelf, setShelf] = React.useState<string>("");
+
   // Cross-list dialog state
   const [crossListDialogOpen, setCrossListDialogOpen] = React.useState(false);
   const [crossListChannel, setCrossListChannel] = React.useState<AssistedChannel | null>(null);
@@ -151,6 +158,9 @@ export default function EditListingPage({ params }: EditListingPageProps) {
           sizeBytes: img.sizeBytes,
         }))
       );
+      setStorageLocation(item.storageLocation ?? "");
+      setBin(item.bin ?? "");
+      setShelf(item.shelf ?? "");
     }
   }, [item, formData]);
 
@@ -227,6 +237,9 @@ export default function EditListingPage({ params }: EditListingPageProps) {
         ? formData.itemSpecifics
         : null,
       suggestedCategory: formData.suggestedCategory,
+      storageLocation: storageLocation.trim() || null,
+      bin: bin.trim() || null,
+      shelf: shelf.trim() || null,
     });
   };
 
@@ -416,7 +429,7 @@ export default function EditListingPage({ params }: EditListingPageProps) {
         </TabsList>
 
         {/* Details Tab */}
-        <TabsContent value="details" className="mt-4">
+        <TabsContent value="details" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Listing Details</CardTitle>
@@ -433,6 +446,73 @@ export default function EditListingPage({ params }: EditListingPageProps) {
                   errors={errors}
                 />
               )}
+            </CardContent>
+          </Card>
+
+          {/* Storage Location Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <CardTitle>Storage Location</CardTitle>
+                  <CardDescription>
+                    Where this item is physically stored for quick retrieval.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Location
+                  </label>
+                  <Input
+                    value={storageLocation}
+                    onChange={(e) => {
+                      setStorageLocation(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    placeholder="e.g. Garage, Closet A"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    General area or room
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Bin
+                  </label>
+                  <Input
+                    value={bin}
+                    onChange={(e) => {
+                      setBin(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    placeholder="e.g. B3, Tote-12"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Container or bin identifier
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Shelf
+                  </label>
+                  <Input
+                    value={shelf}
+                    onChange={(e) => {
+                      setShelf(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    placeholder="e.g. Top, S2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Shelf or rack position
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

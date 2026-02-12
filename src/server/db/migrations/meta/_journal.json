@@ -15,6 +15,27 @@
       "when": 1770180580717,
       "tag": "0001_parched_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1770790155511,
+      "tag": "0002_dazzling_blacklash",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1770862358930,
+      "tag": "0003_tense_gauntlet",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1770862432895,
+      "tag": "0004_nifty_skullbuster",
+      "breakpoints": true
     }
   ]
 }

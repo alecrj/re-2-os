@@ -17,3 +17,4 @@ export type {
   ListingStatus,
   ChannelListing,
 } from "./cross-list-status";
+export { ListingsTable } from "./listings-table";

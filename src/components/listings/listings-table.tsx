@@ -23,43 +23,38 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   ChevronLeft,
   ChevronRight,
-  Package,
   ExternalLink,
+  Tags,
 } from "lucide-react";
-import { CHANNEL_NAMES, type Channel, type OrderStatus } from "@/lib/constants";
+import { CHANNEL_NAMES, type Channel } from "@/lib/constants";
 
-// Order type from tRPC response
-interface OrderItem {
+type ListingStatus = "draft" | "pending" | "active" | "ended" | "sold" | "error";
+
+interface ListingItem {
   id: string;
   title: string;
   sku: string;
-  costBasis: number | null;
+  askingPrice: number;
   imageUrl?: string;
 }
 
-interface Order {
+interface Listing {
   id: string;
-  userId: string;
   itemId: string;
-  channelListingId: string | null;
   channel: Channel;
-  externalOrderId: string | null;
-  salePrice: number;
-  shippingPaid: number | null;
-  platformFees: number | null;
-  shippingCost: number | null;
-  netProfit: number | null;
-  buyerUsername: string | null;
-  status: OrderStatus;
-  orderedAt: Date;
-  paidAt: Date | null;
-  shippedAt: Date | null;
-  deliveredAt: Date | null;
-  item: OrderItem | null;
+  status: ListingStatus;
+  price: number;
+  externalId: string | null;
+  externalUrl: string | null;
+  requiresManualAction: boolean;
+  createdAt: Date;
+  publishedAt: Date | null;
+  endedAt: Date | null;
+  item: ListingItem | null;
 }
 
-interface OrdersTableProps {
-  orders: Order[];
+interface ListingsTableProps {
+  listings: Listing[];
   isLoading?: boolean;
   pagination?: {
     page: number;
@@ -68,35 +63,34 @@ interface OrdersTableProps {
     totalPages: number;
   };
   onPageChange?: (page: number) => void;
-  onOrderClick?: (order: Order) => void;
-  onStatusFilter?: (status: OrderStatus | "all") => void;
+  onStatusFilter?: (status: ListingStatus | "all") => void;
   onChannelFilter?: (channel: Channel | "all") => void;
-  statusFilter?: OrderStatus | "all";
+  statusFilter?: ListingStatus | "all";
   channelFilter?: Channel | "all";
 }
 
 function getStatusBadgeVariant(
-  status: OrderStatus
+  status: ListingStatus
 ): "default" | "secondary" | "success" | "warning" | "destructive" | "info" {
   switch (status) {
+    case "active":
+      return "success";
     case "pending":
       return "warning";
-    case "paid":
-      return "info";
-    case "shipped":
-      return "default";
-    case "delivered":
-      return "success";
-    case "returned":
-      return "destructive";
-    case "cancelled":
+    case "draft":
       return "secondary";
+    case "ended":
+      return "default";
+    case "sold":
+      return "info";
+    case "error":
+      return "destructive";
     default:
       return "default";
   }
 }
 
-function getStatusLabel(status: OrderStatus): string {
+function getStatusLabel(status: ListingStatus): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -108,7 +102,7 @@ function formatCurrency(amount: number | null): string {
   }).format(amount);
 }
 
-function OrdersTableSkeleton() {
+function ListingsTableSkeleton() {
   return (
     <div className="space-y-4">
       {[...Array(5)].map((_, i) => (
@@ -127,30 +121,29 @@ function OrdersTableSkeleton() {
   );
 }
 
-export function OrdersTable({
-  orders,
+export function ListingsTable({
+  listings,
   isLoading,
   pagination,
   onPageChange,
-  onOrderClick,
   onStatusFilter,
   onChannelFilter,
   statusFilter = "all",
   channelFilter = "all",
-}: OrdersTableProps) {
+}: ListingsTableProps) {
   if (isLoading) {
-    return <OrdersTableSkeleton />;
+    return <ListingsTableSkeleton />;
   }
 
-  if (orders.length === 0) {
+  if (listings.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Package className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-semibold">No orders found</h3>
+        <Tags className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold">No listings found</h3>
         <p className="text-muted-foreground">
           {statusFilter !== "all" || channelFilter !== "all"
             ? "Try adjusting your filters."
-            : "Orders will appear here when you make sales."}
+            : "Create listings from your inventory to see them here."}
         </p>
       </div>
     );
@@ -164,7 +157,7 @@ export function OrdersTable({
           <Select
             value={statusFilter}
             onValueChange={(value) =>
-              onStatusFilter?.(value as OrderStatus | "all")
+              onStatusFilter?.(value as ListingStatus | "all")
             }
           >
             <SelectTrigger>
@@ -172,12 +165,12 @@ export function OrdersTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="shipped">Shipped</SelectItem>
-              <SelectItem value="delivered">Delivered</SelectItem>
-              <SelectItem value="returned">Returned</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="ended">Ended</SelectItem>
+              <SelectItem value="sold">Sold</SelectItem>
+              <SelectItem value="error">Error</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -209,26 +202,21 @@ export function OrdersTable({
             <TableRow>
               <TableHead className="w-[300px]">Item</TableHead>
               <TableHead>Channel</TableHead>
-              <TableHead className="text-right">Sale Price</TableHead>
-              <TableHead className="text-right">Fees</TableHead>
-              <TableHead className="text-right">Profit</TableHead>
+              <TableHead className="text-right">Price</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>Listed</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.map((order) => (
-              <TableRow
-                key={order.id}
-                className="cursor-pointer"
-                onClick={() => onOrderClick?.(order)}
-              >
+            {listings.map((listing) => (
+              <TableRow key={listing.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    {order.item?.imageUrl ? (
+                    {listing.item?.imageUrl ? (
                       <Image
-                        src={order.item.imageUrl}
-                        alt={order.item.title}
+                        src={listing.item.imageUrl}
+                        alt={listing.item.title}
                         className="h-10 w-10 rounded object-cover"
                         width={40}
                         height={40}
@@ -236,51 +224,52 @@ export function OrdersTable({
                       />
                     ) : (
                       <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
-                        <Package className="h-5 w-5 text-muted-foreground" />
+                        <Tags className="h-5 w-5 text-muted-foreground" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="font-medium truncate">
-                        {order.item?.title ?? "Unknown Item"}
+                        {listing.item?.title ?? "Unknown Item"}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {order.item?.sku ?? order.externalOrderId ?? order.id.slice(0, 8)}
+                        {listing.item?.sku ?? listing.id.slice(0, 8)}
                       </p>
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1">
-                    <span>{CHANNEL_NAMES[order.channel]}</span>
-                    {order.externalOrderId && (
-                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </div>
+                  <span>{CHANNEL_NAMES[listing.channel]}</span>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatCurrency(order.salePrice)}
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {formatCurrency(order.platformFees)}
-                </TableCell>
-                <TableCell
-                  className={`text-right font-medium ${
-                    (order.netProfit ?? 0) >= 0
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  {formatCurrency(order.netProfit)}
+                  {formatCurrency(listing.price)}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getStatusBadgeVariant(order.status)}>
-                    {getStatusLabel(order.status)}
+                  <Badge variant={getStatusBadgeVariant(listing.status)}>
+                    {getStatusLabel(listing.status)}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {formatDistanceToNow(new Date(order.orderedAt), {
-                    addSuffix: true,
-                  })}
+                  {listing.publishedAt
+                    ? formatDistanceToNow(new Date(listing.publishedAt), {
+                        addSuffix: true,
+                      })
+                    : listing.createdAt
+                      ? formatDistanceToNow(new Date(listing.createdAt), {
+                          addSuffix: true,
+                        })
+                      : "-"}
+                </TableCell>
+                <TableCell>
+                  {listing.externalUrl && (
+                    <a
+                      href={listing.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                    </a>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -294,7 +283,7 @@ export function OrdersTable({
           <p className="text-sm text-muted-foreground">
             Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
-            {pagination.total} orders
+            {pagination.total} listings
           </p>
           <div className="flex items-center gap-2">
             <Button

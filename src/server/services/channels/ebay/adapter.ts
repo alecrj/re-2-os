@@ -1,7 +1,7 @@
 /**
  * eBay Channel Adapter for ResellerOS
  *
- * Native integration with eBay's Inventory and Fulfillment APIs.
+ * Native integration with eBay's Inventory, Fulfillment, and Trading APIs.
  * Implements the ChannelAdapter interface for full automation support.
  */
 
@@ -18,6 +18,12 @@ import {
   CONDITION_TO_EBAY,
 } from "../types";
 import { EbayClient, getEbayClient } from "./client";
+import {
+  EbayTradingClient,
+  getEbayTradingClient,
+  type OfferAction,
+  type RespondToBestOfferResult,
+} from "./trading";
 
 // ============ EBAY API TYPES ============
 
@@ -211,6 +217,7 @@ export class EbayAdapter implements ChannelAdapter {
   };
 
   private client: EbayClient;
+  private tradingClient: EbayTradingClient;
 
   // Default policy IDs - these should be configured per user in production
   private defaultPolicies = {
@@ -220,8 +227,9 @@ export class EbayAdapter implements ChannelAdapter {
     merchantLocationKey: process.env.EBAY_MERCHANT_LOCATION_KEY ?? "",
   };
 
-  constructor(client?: EbayClient) {
+  constructor(client?: EbayClient, tradingClient?: EbayTradingClient) {
     this.client = client ?? getEbayClient();
+    this.tradingClient = tradingClient ?? getEbayTradingClient();
   }
 
   // ============ AUTHENTICATION ============
@@ -672,6 +680,146 @@ export class EbayAdapter implements ChannelAdapter {
       console.error("[EbayAdapter] Inventory sync failed:", error);
       throw error;
     }
+  }
+
+  // ============ OFFER RESPONSE METHODS ============
+
+  /**
+   * Respond to a Best Offer on an eBay listing.
+   * Uses the eBay Trading API (RespondToBestOffer).
+   *
+   * @param userId - The seller's user ID (for token retrieval)
+   * @param itemId - The eBay listing/item ID (legacy item ID)
+   * @param bestOfferId - The Best Offer ID to respond to
+   * @param action - Accept, Decline, or Counter
+   * @param counterPrice - Counter offer price (required when action is "Counter")
+   * @param sellerMessage - Optional message to the buyer
+   */
+  async respondToOffer(
+    userId: string,
+    itemId: string,
+    bestOfferId: string,
+    action: OfferAction,
+    counterPrice?: number,
+    sellerMessage?: string
+  ): Promise<RespondToBestOfferResult> {
+    try {
+      // Get a valid access token for the Trading API
+      const accessToken = await this.getAccessToken(userId);
+
+      const result = await this.tradingClient.respondToBestOffer(accessToken, {
+        itemId,
+        bestOfferIds: [bestOfferId],
+        action,
+        counterOfferPrice: counterPrice,
+        sellerMessage,
+      });
+
+      if (!result.success) {
+        console.error(
+          `[EbayAdapter] respondToOffer failed: ${result.error}`
+        );
+      }
+
+      return result;
+    } catch (error) {
+      console.error("[EbayAdapter] respondToOffer error:", error);
+      return {
+        success: false,
+        responses: [],
+        error: error instanceof Error ? error.message : "Unknown error responding to offer",
+      };
+    }
+  }
+
+  /**
+   * Accept a Best Offer on an eBay listing.
+   */
+  async acceptOffer(
+    userId: string,
+    itemId: string,
+    bestOfferId: string,
+    sellerMessage?: string
+  ): Promise<RespondToBestOfferResult> {
+    return this.respondToOffer(userId, itemId, bestOfferId, "Accept", undefined, sellerMessage);
+  }
+
+  /**
+   * Decline a Best Offer on an eBay listing.
+   */
+  async declineOffer(
+    userId: string,
+    itemId: string,
+    bestOfferId: string,
+    sellerMessage?: string
+  ): Promise<RespondToBestOfferResult> {
+    return this.respondToOffer(userId, itemId, bestOfferId, "Decline", undefined, sellerMessage);
+  }
+
+  /**
+   * Counter a Best Offer on an eBay listing.
+   */
+  async counterOffer(
+    userId: string,
+    itemId: string,
+    bestOfferId: string,
+    counterPrice: number,
+    sellerMessage?: string
+  ): Promise<RespondToBestOfferResult> {
+    return this.respondToOffer(userId, itemId, bestOfferId, "Counter", counterPrice, sellerMessage);
+  }
+
+  /**
+   * Get a valid access token for Trading API calls.
+   * Leverages the existing EbayClient token management.
+   */
+  private async getAccessToken(userId: string): Promise<string> {
+    // Use the client's request method to trigger token refresh if needed,
+    // then retrieve the token. We make a lightweight call that returns the token.
+    // The EbayClient internally manages token refresh, so we do a minimal GET
+    // to ensure the token is valid, then extract it.
+    //
+    // A cleaner approach: we use the client's internal token resolution.
+    // Since the client exposes request(), we call a lightweight endpoint.
+    // The token is stored in the database, so we read it directly after
+    // ensuring it's fresh.
+    try {
+      // Trigger token refresh if needed by making a lightweight API call
+      await this.client.request(userId, {
+        method: "GET",
+        path: "/inventory_item?limit=1",
+      });
+    } catch {
+      // If the inventory call fails, the token refresh may still have succeeded.
+      // Continue and try to get the token from the database.
+    }
+
+    // Read the fresh token from the database
+    const { db } = await import("@/server/db/client");
+    const { channelConnections } = await import("@/server/db/schema");
+    const { eq, and } = await import("drizzle-orm");
+
+    const connection = await db
+      .select({ accessToken: channelConnections.accessToken })
+      .from(channelConnections)
+      .where(
+        and(
+          eq(channelConnections.userId, userId),
+          eq(channelConnections.channel, "ebay")
+        )
+      )
+      .limit(1);
+
+    if (connection.length === 0 || !connection[0].accessToken) {
+      throw new ChannelApiError(
+        "No valid eBay access token found",
+        "AUTHENTICATION_FAILED",
+        401,
+        false
+      );
+    }
+
+    return connection[0].accessToken;
   }
 
   // ============ HELPER METHODS ============

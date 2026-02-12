@@ -11,6 +11,7 @@
  */
 
 import * as React from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,8 @@ import {
   ChevronRight,
   Package,
   Loader2,
+  PackageCheck,
+  MapPin,
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -106,6 +109,8 @@ export function InventoryTable({ className }: InventoryTableProps) {
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
+  const [locationQuery, setLocationQuery] = React.useState("");
+  const [debouncedLocation, setDebouncedLocation] = React.useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
 
@@ -117,10 +122,19 @@ export function InventoryTable({ className }: InventoryTableProps) {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Debounce location filter
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedLocation(locationQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [locationQuery]);
+
   // Queries
   const { data, isLoading, isFetching } = trpc.inventory.list.useQuery({
     status: statusFilter === "all" ? undefined : statusFilter,
     search: debouncedSearch || undefined,
+    location: debouncedLocation || undefined,
     limit: 20,
   });
 
@@ -209,6 +223,15 @@ export function InventoryTable({ className }: InventoryTableProps) {
               <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
+          <div className="relative">
+            <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Filter by location..."
+              value={locationQuery}
+              onChange={(e) => setLocationQuery(e.target.value)}
+              className="pl-8 w-[180px]"
+            />
+          </div>
         </div>
 
         {/* Bulk Actions */}
@@ -267,6 +290,7 @@ export function InventoryTable({ className }: InventoryTableProps) {
               <TableHead className="text-right">Price</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Channels</TableHead>
+              <TableHead>Location</TableHead>
               <TableHead className="text-right">Days Active</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -295,6 +319,9 @@ export function InventoryTable({ className }: InventoryTableProps) {
                     <Skeleton className="h-5 w-[80px]" />
                   </TableCell>
                   <TableCell>
+                    <Skeleton className="h-4 w-[60px]" />
+                  </TableCell>
+                  <TableCell>
                     <Skeleton className="h-4 w-[40px] ml-auto" />
                   </TableCell>
                   <TableCell>
@@ -304,16 +331,17 @@ export function InventoryTable({ className }: InventoryTableProps) {
               ))
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center">
+                <TableCell colSpan={9} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Package className="h-8 w-8 text-muted-foreground" />
                     <p className="text-muted-foreground">No items found</p>
-                    {(searchQuery || statusFilter !== "all") && (
+                    {(searchQuery || statusFilter !== "all" || locationQuery) && (
                       <Button
                         variant="link"
                         onClick={() => {
                           setSearchQuery("");
                           setStatusFilter("all");
+                          setLocationQuery("");
                         }}
                       >
                         Clear filters
@@ -343,10 +371,13 @@ export function InventoryTable({ className }: InventoryTableProps) {
                   </TableCell>
                   <TableCell>
                     {item.imageUrl ? (
-                      <img
+                      <Image
                         src={item.imageUrl}
                         alt={item.title}
                         className="h-10 w-10 rounded object-cover"
+                        width={40}
+                        height={40}
+                        unoptimized
                       />
                     ) : (
                       <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
@@ -369,12 +400,19 @@ export function InventoryTable({ className }: InventoryTableProps) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={cn("capitalize", statusColors[item.status])}
-                    >
-                      {item.status}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge
+                        variant="secondary"
+                        className={cn("capitalize", statusColors[item.status])}
+                      >
+                        {item.status}
+                      </Badge>
+                      {item.shipReady && (
+                        <span title="Ship-ready">
+                          <PackageCheck className="h-4 w-4 text-green-600" />
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
@@ -398,6 +436,22 @@ export function InventoryTable({ className }: InventoryTableProps) {
                         ))
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {(item.storageLocation || item.bin || item.shelf) ? (
+                      <div className="text-xs">
+                        {item.storageLocation && (
+                          <div className="font-medium">{item.storageLocation}</div>
+                        )}
+                        {(item.bin || item.shelf) && (
+                          <div className="text-muted-foreground">
+                            {[item.bin, item.shelf].filter(Boolean).join(" / ")}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     {item.daysActive !== null ? (

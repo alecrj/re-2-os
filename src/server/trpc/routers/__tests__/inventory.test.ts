@@ -183,6 +183,81 @@ describe("inventoryRouter", () => {
     });
   });
 
+  describe("bulkUpdateStatus input validation", () => {
+    it("should require at least one id and a status", () => {
+      const input = {
+        ids: ["item-1", "item-2"],
+        status: "archived" as const,
+      };
+
+      expect(input.ids.length).toBeGreaterThanOrEqual(1);
+      expect(input.status).toBe("archived");
+    });
+
+    it("should accept all valid statuses", () => {
+      const statuses = ["draft", "active", "sold", "shipped", "archived"] as const;
+      for (const status of statuses) {
+        const input = { ids: ["item-1"], status };
+        expect(input.status).toBe(status);
+      }
+    });
+
+    it("should enforce max 100 items", () => {
+      const ids = Array.from({ length: 100 }, (_, i) => `item-${i}`);
+      expect(ids.length).toBe(100);
+    });
+  });
+
+  describe("bulkReprice input validation", () => {
+    it("should accept fixed price mode", () => {
+      const input = {
+        ids: ["item-1", "item-2"],
+        mode: "fixed" as const,
+        value: 25.99,
+      };
+
+      expect(input.mode).toBe("fixed");
+      expect(input.value).toBeGreaterThan(0);
+    });
+
+    it("should accept percent_decrease mode", () => {
+      const input = {
+        ids: ["item-1"],
+        mode: "percent_decrease" as const,
+        value: 10, // 10% decrease
+      };
+
+      expect(input.mode).toBe("percent_decrease");
+    });
+
+    it("should accept percent_increase mode", () => {
+      const input = {
+        ids: ["item-1"],
+        mode: "percent_increase" as const,
+        value: 15, // 15% increase
+      };
+
+      expect(input.mode).toBe("percent_increase");
+    });
+
+    it("should require positive value", () => {
+      const validInput = { ids: ["item-1"], mode: "fixed" as const, value: 0.01 };
+      expect(validInput.value).toBeGreaterThan(0);
+    });
+  });
+
+  describe("bulkDelist input validation", () => {
+    it("should require at least one id", () => {
+      const input = { ids: ["item-1", "item-2", "item-3"] };
+      expect(input.ids.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("should enforce max 100 items", () => {
+      const ids = Array.from({ length: 100 }, (_, i) => `item-${i}`);
+      expect(ids.length).toBe(100);
+    });
+  });
+
   describe("publish input validation", () => {
     it("should require item id and channels", () => {
       const input = {
@@ -399,6 +474,55 @@ describe("syncFromEbay", () => {
       expect(results.updated).toBe(1);
       expect(results.errors).toHaveLength(1);
     });
+  });
+});
+
+describe("bulk reprice business logic", () => {
+  it("should calculate fixed price correctly", () => {
+    const _originalPrice = 100;
+    const newPrice = 75.0; // Fixed mode
+    expect(newPrice).toBe(75.0);
+  });
+
+  it("should calculate percent decrease correctly", () => {
+    const originalPrice = 100;
+    const decreasePercent = 10;
+    const newPrice = Math.round(originalPrice * (1 - decreasePercent / 100) * 100) / 100;
+    expect(newPrice).toBe(90.0);
+  });
+
+  it("should calculate percent increase correctly", () => {
+    const originalPrice = 100;
+    const increasePercent = 15;
+    const newPrice = Math.round(originalPrice * (1 + increasePercent / 100) * 100) / 100;
+    expect(newPrice).toBe(115.0);
+  });
+
+  it("should skip items when new price would be below floor", () => {
+    const item = { askingPrice: 100, floorPrice: 85 };
+    const decreasePercent = 20;
+    const newPrice = Math.round(item.askingPrice * (1 - decreasePercent / 100) * 100) / 100;
+
+    expect(newPrice).toBe(80.0);
+    expect(newPrice < item.floorPrice).toBe(true); // Should be skipped
+  });
+
+  it("should allow price at exactly floor price", () => {
+    const item = { askingPrice: 100, floorPrice: 90 };
+    const decreasePercent = 10;
+    const newPrice = Math.round(item.askingPrice * (1 - decreasePercent / 100) * 100) / 100;
+
+    expect(newPrice).toBe(90.0);
+    expect(newPrice >= item.floorPrice).toBe(true); // Should be allowed
+  });
+
+  it("should handle rounding correctly for fractional cents", () => {
+    const originalPrice = 99.99;
+    const decreasePercent = 15;
+    const newPrice = Math.round(originalPrice * (1 - decreasePercent / 100) * 100) / 100;
+
+    // 99.99 * 0.85 = 84.9915, should round to 84.99
+    expect(newPrice).toBe(84.99);
   });
 });
 

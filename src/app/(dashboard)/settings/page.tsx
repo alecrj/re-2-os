@@ -1,6 +1,6 @@
 "use client";
 
-import { Link as LinkIcon, Zap, User, History } from "lucide-react";
+import { Link as LinkIcon, Zap, User, History, Bell } from "lucide-react";
 import Link from "next/link";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuditLog } from "@/components/audit/audit-log";
+import { NotificationPreferences } from "@/components/settings/notification-preferences";
 
 export default function SettingsPage() {
   return (
@@ -26,6 +27,10 @@ export default function SettingsPage() {
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-1">
+            <Bell className="h-4 w-4" />
+            Notifications
+          </TabsTrigger>
           <TabsTrigger value="audit" className="gap-1">
             <History className="h-4 w-4" />
             Audit Log
@@ -100,6 +105,10 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <NotificationPreferences />
         </TabsContent>
 
         <TabsContent value="audit">

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -26,6 +27,7 @@ import {
   Calendar,
   Truck,
   DollarSign,
+  Warehouse,
 } from "lucide-react";
 import { CHANNEL_NAMES, type Channel, type OrderStatus } from "@/lib/constants";
 import { ShipOrderForm } from "./ship-order-form";
@@ -39,6 +41,9 @@ interface OrderDetailItem {
   condition: string;
   askingPrice: number;
   costBasis: number | null;
+  storageLocation: string | null;
+  bin: string | null;
+  shelf: string | null;
   images?: string[];
 }
 
@@ -174,10 +179,13 @@ export function OrderDetailDialog({
             <CardContent>
               <div className="flex gap-4">
                 {order.item?.images && order.item.images.length > 0 ? (
-                  <img
+                  <Image
                     src={order.item.images[0]}
                     alt={order.item.title}
                     className="h-24 w-24 rounded-lg object-cover"
+                    width={96}
+                    height={96}
+                    unoptimized
                   />
                 ) : (
                   <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center">
@@ -201,6 +209,43 @@ export function OrderDetailDialog({
               </div>
             </CardContent>
           </Card>
+
+          {/* Storage Location Alert */}
+          {order.item &&
+            (order.item.storageLocation || order.item.bin || order.item.shelf) && (
+              <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Warehouse className="h-4 w-4" />
+                    Find This Item
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                    {order.item.storageLocation && (
+                      <div>
+                        <span className="text-muted-foreground">Location: </span>
+                        <span className="font-semibold">
+                          {order.item.storageLocation}
+                        </span>
+                      </div>
+                    )}
+                    {order.item.shelf && (
+                      <div>
+                        <span className="text-muted-foreground">Shelf: </span>
+                        <span className="font-semibold">{order.item.shelf}</span>
+                      </div>
+                    )}
+                    {order.item.bin && (
+                      <div>
+                        <span className="text-muted-foreground">Bin: </span>
+                        <span className="font-semibold">{order.item.bin}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
           {/* Financial Breakdown */}
           <Card>

@@ -169,6 +169,12 @@ export const inventoryItems = sqliteTable(
       Record<string, string>
     >(),
 
+    // Storage & Organization
+    storageLocation: text("storage_location"), // e.g. "Garage", "Closet A"
+    bin: text("bin"), // e.g. "B3", "Tote-12"
+    shelf: text("shelf"), // e.g. "Top", "S2"
+    shipReady: integer("ship_ready", { mode: "boolean" }).notNull().default(false),
+
     // Timestamps
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
@@ -183,6 +189,10 @@ export const inventoryItems = sqliteTable(
       table.status
     ),
     skuIdx: index("inventory_items_sku_idx").on(table.userId, table.sku),
+    storageLocationIdx: index("inventory_items_storage_location_idx").on(
+      table.userId,
+      table.storageLocation
+    ),
   })
 );
 
@@ -503,9 +513,49 @@ export const auditLog = sqliteTable(
   })
 );
 
+// ============ NOTIFICATION PREFERENCES ============
+
+export interface NotificationPrefs {
+  offerReceived: { inApp: boolean; email: boolean };
+  offerAutoActioned: { inApp: boolean; email: boolean };
+  saleConfirmed: { inApp: boolean; email: boolean };
+  delistAlert: { inApp: boolean; email: boolean };
+  repriceAlert: { inApp: boolean; email: boolean };
+  staleListingAlert: { inApp: boolean; email: boolean };
+  syncError: { inApp: boolean; email: boolean };
+}
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  offerReceived: { inApp: true, email: true },
+  offerAutoActioned: { inApp: true, email: false },
+  saleConfirmed: { inApp: true, email: true },
+  delistAlert: { inApp: true, email: true },
+  repriceAlert: { inApp: true, email: false },
+  staleListingAlert: { inApp: true, email: false },
+  syncError: { inApp: true, email: true },
+};
+
+export const notificationPreferences = sqliteTable(
+  "notification_preferences",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id)
+      .unique(),
+    preferences: text("preferences", { mode: "json" })
+      .notNull()
+      .$type<NotificationPrefs>(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("notification_prefs_user_id_idx").on(table.userId),
+  })
+);
+
 // ============ RELATIONS ============
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   accounts: many(accounts),
   sessions: many(sessions),
   channelConnections: many(channelConnections),
@@ -514,7 +564,18 @@ export const usersRelations = relations(users, ({ many }) => ({
   autopilotRules: many(autopilotRules),
   autopilotActions: many(autopilotActions),
   auditLog: many(auditLog),
+  notificationPreferences: one(notificationPreferences),
 }));
+
+export const notificationPreferencesRelations = relations(
+  notificationPreferences,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [notificationPreferences.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
   user: one(users, {

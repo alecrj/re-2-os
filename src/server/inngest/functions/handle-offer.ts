@@ -17,11 +17,12 @@
 
 import { inngest } from "../client";
 import { db } from "@/server/db/client";
-import { autopilotActions, autopilotRules, inventoryItems } from "@/server/db/schema";
+import { autopilotActions, autopilotRules, channelListings, inventoryItems } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { evaluateOffer, type OfferContext } from "@/server/services/autopilot";
 import { auditService } from "@/server/services/audit";
-import { getAdapter, isNativeChannel, type ChannelId } from "@/server/services/channels";
+import { isNativeChannel, type ChannelId } from "@/server/services/channels";
+import { getEbayAdapter } from "@/server/services/channels/ebay";
 
 export const handleOffer = inngest.createFunction(
   {
@@ -206,31 +207,47 @@ export const handleOffer = inngest.createFunction(
       }
 
       try {
-        // Get the adapter to verify the channel is properly configured
-        // The adapter variable is prefixed with underscore as offer methods are not yet implemented
-        const _adapter = getAdapter(channelId);
+        // Look up the eBay listing ID (externalId) from the channel listing
+        const listing = await db.query.channelListings.findFirst({
+          where: eq(channelListings.id, channelListingId),
+          columns: { externalId: true },
+        });
 
-        // eBay offer handling via Trading API
-        // Note: The current eBay adapter uses Inventory API which doesn't handle offers directly.
-        // Offer handling requires the Trading API's RespondToBestOffer call.
-        // For now, we log the intended action and mark as executed.
-        // Full implementation would use: await _adapter.respondToOffer(userId, offerId, decision, counterAmount)
+        if (!listing?.externalId) {
+          throw new Error(`No external listing ID found for channel listing ${channelListingId}`);
+        }
 
+        const ebayItemId = listing.externalId;
+        const adapter = getEbayAdapter();
+
+        // Execute via eBay Trading API (RespondToBestOffer)
+        let result;
         switch (evaluation.decision) {
           case "ACCEPT":
-            console.log(`[handle-offer] Accepting offer ${offerId} via ${channel} adapter`);
-            // In production: await (adapter as EbayAdapter).acceptOffer(userId, offerId);
+            console.log(`[handle-offer] Accepting offer ${offerId} on item ${ebayItemId}`);
+            result = await adapter.acceptOffer(userId, ebayItemId, offerId);
             break;
           case "DECLINE":
-            console.log(`[handle-offer] Declining offer ${offerId} via ${channel} adapter`);
-            // In production: await (adapter as EbayAdapter).declineOffer(userId, offerId);
+            console.log(`[handle-offer] Declining offer ${offerId} on item ${ebayItemId}`);
+            result = await adapter.declineOffer(userId, ebayItemId, offerId);
             break;
           case "COUNTER":
             console.log(
-              `[handle-offer] Countering offer ${offerId} with $${evaluation.counterAmount} via ${channel} adapter`
+              `[handle-offer] Countering offer ${offerId} with $${evaluation.counterAmount} on item ${ebayItemId}`
             );
-            // In production: await (adapter as EbayAdapter).counterOffer(userId, offerId, evaluation.counterAmount!);
+            result = await adapter.counterOffer(
+              userId,
+              ebayItemId,
+              offerId,
+              evaluation.counterAmount!
+            );
             break;
+          default:
+            throw new Error(`Unexpected decision: ${evaluation.decision}`);
+        }
+
+        if (!result.success) {
+          throw new Error(result.error ?? "Trading API call failed");
         }
 
         // Update the autopilot action status to executed
@@ -244,7 +261,7 @@ export const handleOffer = inngest.createFunction(
 
         return {
           executed: true,
-          reason: `Auto-executed ${evaluation.decision} via ${channel} adapter`,
+          reason: `Auto-executed ${evaluation.decision} via ${channel} Trading API`,
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";

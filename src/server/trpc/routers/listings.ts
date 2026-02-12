@@ -2,14 +2,179 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../init";
 import { db } from "@/server/db/client";
 import { inventoryItems, channelListings, itemImages } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { generateCrossListTemplate, getAdapter, isNativeChannel } from "@/server/services/channels";
 import { auditService } from "@/server/services/audit";
 
 const ChannelEnum = z.enum(["ebay", "poshmark", "mercari", "depop"]);
 
+const ListingStatusEnum = z.enum(["draft", "pending", "active", "ended", "sold", "error"]);
+
 export const listingsRouter = createTRPCRouter({
+  /**
+   * List all channel listings for the current user with filters and pagination
+   */
+  list: protectedProcedure
+    .input(
+      z.object({
+        channel: ChannelEnum.optional(),
+        status: ListingStatusEnum.optional(),
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(100).default(25),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.user.id;
+      const offset = (input.page - 1) * input.limit;
+
+      // Build where conditions - we need to join with inventory_items to filter by userId
+      const conditions = [eq(inventoryItems.userId, userId)];
+      if (input.channel) {
+        conditions.push(eq(channelListings.channel, input.channel));
+      }
+      if (input.status) {
+        conditions.push(eq(channelListings.status, input.status));
+      }
+
+      // Query listings with related item data
+      const listingRows = await db
+        .select({
+          listing: channelListings,
+          item: {
+            id: inventoryItems.id,
+            title: inventoryItems.title,
+            sku: inventoryItems.sku,
+            askingPrice: inventoryItems.askingPrice,
+          },
+        })
+        .from(channelListings)
+        .innerJoin(inventoryItems, eq(channelListings.itemId, inventoryItems.id))
+        .where(and(...conditions))
+        .orderBy(desc(channelListings.createdAt))
+        .limit(input.limit)
+        .offset(offset);
+
+      // Get total count for pagination
+      const countResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(channelListings)
+        .innerJoin(inventoryItems, eq(channelListings.itemId, inventoryItems.id))
+        .where(and(...conditions));
+
+      const total = countResult[0]?.count ?? 0;
+
+      // Fetch first image for each item
+      const itemIds = listingRows
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((r: any) => r.item?.id)
+        .filter((id: string | undefined): id is string => id !== undefined);
+
+      const images =
+        itemIds.length > 0
+          ? await db
+              .select({
+                itemId: itemImages.itemId,
+                url: itemImages.originalUrl,
+              })
+              .from(itemImages)
+              .where(
+                and(
+                  sql`${itemImages.itemId} IN ${itemIds}`,
+                  eq(itemImages.position, 0)
+                )
+              )
+          : [];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const imageMap = new Map(images.map((img: any) => [img.itemId, img.url]));
+
+      return {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        listings: listingRows.map((row: any) => ({
+          ...row.listing,
+          item: row.item
+            ? {
+                ...row.item,
+                imageUrl: imageMap.get(row.item.id),
+              }
+            : null,
+        })),
+        pagination: {
+          page: input.page,
+          limit: input.limit,
+          total,
+          totalPages: Math.ceil(total / input.limit),
+        },
+      };
+    }),
+
+  /**
+   * Get listing stats (counts per channel and status)
+   */
+  getStats: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.user.id;
+
+    // Count by channel
+    const channelStats = await db
+      .select({
+        channel: channelListings.channel,
+        count: sql<number>`count(*)`,
+      })
+      .from(channelListings)
+      .innerJoin(inventoryItems, eq(channelListings.itemId, inventoryItems.id))
+      .where(
+        and(
+          eq(inventoryItems.userId, userId),
+          eq(channelListings.status, "active")
+        )
+      )
+      .groupBy(channelListings.channel);
+
+    const channelCounts: Record<string, number> = {
+      ebay: 0,
+      poshmark: 0,
+      mercari: 0,
+      depop: 0,
+    };
+
+    for (const stat of channelStats) {
+      channelCounts[stat.channel] = stat.count;
+    }
+
+    // Count by status
+    const statusStats = await db
+      .select({
+        status: channelListings.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(channelListings)
+      .innerJoin(inventoryItems, eq(channelListings.itemId, inventoryItems.id))
+      .where(eq(inventoryItems.userId, userId))
+      .groupBy(channelListings.status);
+
+    const statusCounts: Record<string, number> = {
+      draft: 0,
+      pending: 0,
+      active: 0,
+      ended: 0,
+      sold: 0,
+      error: 0,
+    };
+
+    for (const stat of statusStats) {
+      statusCounts[stat.status] = stat.count;
+    }
+
+    const totalActive = Object.values(channelCounts).reduce((a, b) => a + b, 0);
+
+    return {
+      channelCounts,
+      statusCounts,
+      totalActive,
+    };
+  }),
+
   /**
    * Get all channel listings for an inventory item
    */

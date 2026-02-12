@@ -12,6 +12,7 @@
  */
 
 import * as React from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc/client";
@@ -413,10 +414,13 @@ export function ImageUpload({
                 draggedImageId === image.id && "opacity-50"
               )}
             >
-              <img
+              <Image
                 src={image.processedUrl || image.originalUrl}
                 alt={`Image ${index + 1}`}
                 className="w-full h-full object-cover"
+                width={200}
+                height={200}
+                unoptimized
               />
 
               {/* Position Badge */}
@@ -451,10 +455,13 @@ export function ImageUpload({
               key={upload.id}
               className="relative aspect-square rounded-lg overflow-hidden border bg-muted"
             >
-              <img
+              <Image
                 src={upload.preview}
                 alt="Uploading"
                 className="w-full h-full object-cover opacity-50"
+                width={200}
+                height={200}
+                unoptimized
               />
 
               {/* Progress Overlay */}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfferRulesConfig } from "@/components/autopilot/offer-rules-config";
+import { RepriceRulesConfig } from "@/components/autopilot/reprice-rules-config";
 import { PendingActions } from "@/components/autopilot/pending-actions";
 import { trpc } from "@/lib/trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -157,7 +158,7 @@ export default function AutopilotSettingsPage() {
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="repricing" className="gap-2" disabled>
+              <TabsTrigger value="repricing" className="gap-2">
                 <TrendingDown className="h-4 w-4" />
                 Repricing
               </TabsTrigger>
@@ -176,17 +177,7 @@ export default function AutopilotSettingsPage() {
             </TabsContent>
 
             <TabsContent value="repricing">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Repricing Rules</CardTitle>
-                  <CardDescription>Coming soon</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    Automatic repricing based on time, performance, and competition.
-                  </p>
-                </CardContent>
-              </Card>
+              <RepriceRulesConfig />
             </TabsContent>
 
             <TabsContent value="notifications">

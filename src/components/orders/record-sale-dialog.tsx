@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -224,10 +225,13 @@ export function RecordSaleDialog({
                       <SelectItem key={item.id} value={item.id}>
                         <div className="flex items-center gap-2">
                           {item.imageUrl ? (
-                            <img
+                            <Image
                               src={item.imageUrl}
                               alt=""
                               className="h-6 w-6 rounded object-cover"
+                              width={24}
+                              height={24}
+                              unoptimized
                             />
                           ) : (
                             <Package className="h-6 w-6 text-muted-foreground" />

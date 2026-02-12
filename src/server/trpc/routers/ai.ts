@@ -10,9 +10,14 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../init";
 import { generateListing } from "@/server/services/ai";
+import {
+  removeBackground,
+  checkBgRemovalQuota,
+} from "@/server/services/ai/background-removal";
+import { suggestPrice } from "@/server/services/ai/price-suggestion";
 import { db } from "@/server/db/client";
-import { itemImages } from "@/server/db/schema";
-import { inArray } from "drizzle-orm";
+import { inventoryItems, itemImages } from "@/server/db/schema";
+import { eq, inArray } from "drizzle-orm";
 
 // ============ INPUT SCHEMAS ============
 
@@ -243,11 +248,174 @@ export const aiRouter = createTRPCRouter({
     }),
 
   /**
+   * Get AI-powered price suggestion for an inventory item
+   *
+   * Can be called with an item ID (fetches details from DB) or
+   * with direct item details for items not yet saved.
+   */
+  suggestPrice: protectedProcedure
+    .input(
+      z.object({
+        /** Provide itemId to fetch details from DB */
+        itemId: z.string().optional(),
+        /** Or provide details directly */
+        title: z.string().optional(),
+        description: z.string().optional(),
+        condition: z
+          .enum(["new", "like_new", "good", "fair", "poor"])
+          .optional(),
+        category: z.string().optional(),
+        brand: z.string().optional(),
+        costBasis: z.number().optional(),
+        originalRetailPrice: z.number().optional(),
+        targetPlatform: z.enum(["ebay", "poshmark", "mercari"]).default("ebay"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      let title = input.title ?? "";
+      let description = input.description;
+      let condition = input.condition ?? "good";
+      let category = input.category;
+      let costBasis = input.costBasis;
+      let imageUrls: string[] = [];
+
+      // If itemId provided, fetch item details from DB
+      if (input.itemId) {
+        const item = await db.query.inventoryItems.findFirst({
+          where: eq(inventoryItems.id, input.itemId),
+          with: { images: true },
+        });
+
+        if (!item) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Item not found",
+          });
+        }
+
+        title = title || item.title;
+        description = description ?? item.description;
+        condition = input.condition ?? (item.condition as typeof condition);
+        category = category ?? item.suggestedCategory ?? undefined;
+        costBasis = costBasis ?? item.costBasis ?? undefined;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        imageUrls = (item.images as any[])
+          .sort((a: { position: number }, b: { position: number }) => a.position - b.position)
+          .slice(0, 4)
+          .map((img: { processedUrl?: string; originalUrl: string }) =>
+            img.processedUrl || img.originalUrl
+          );
+      }
+
+      if (!title) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Item title is required (provide title or itemId)",
+        });
+      }
+
+      try {
+        const result = await suggestPrice({
+          title,
+          description,
+          condition,
+          category,
+          brand: input.brand,
+          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+          targetPlatform: input.targetPlatform,
+          costBasis,
+          originalRetailPrice: input.originalRetailPrice,
+        });
+
+        return result;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Price suggestion failed";
+
+        if (message.includes("API key")) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "AI service configuration error. Please contact support.",
+          });
+        }
+
+        if (message.includes("rate limit")) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "AI service is busy. Please try again in a moment.",
+          });
+        }
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message,
+          cause: error,
+        });
+      }
+    }),
+
+  /**
+   * Remove background from a product image
+   *
+   * Pipeline:
+   * 1. Check user quota
+   * 2. Fetch image from DB
+   * 3. Call remove.bg API
+   * 4. Upload processed image to R2
+   * 5. Update DB record with processed URL
+   * 6. Increment usage count
+   */
+  removeBackground: protectedProcedure
+    .input(
+      z.object({
+        imageId: z.string().min(1, "Image ID is required"),
+        options: z
+          .object({
+            size: z
+              .enum(["auto", "preview", "small", "medium", "hd"])
+              .optional(),
+            format: z.enum(["png", "webp"]).optional(),
+            bgColor: z.string().optional(),
+          })
+          .optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const result = await removeBackground(
+        ctx.user.id,
+        input.imageId,
+        input.options
+      );
+
+      if (!result.success) {
+        throw new TRPCError({
+          code: result.error?.includes("quota")
+            ? "FORBIDDEN"
+            : "INTERNAL_SERVER_ERROR",
+          message: result.error ?? "Background removal failed",
+        });
+      }
+
+      return {
+        processedUrl: result.processedUrl!,
+        processingTimeMs: result.processingTimeMs,
+      };
+    }),
+
+  /**
+   * Check the user's background removal quota
+   */
+  bgRemovalQuota: protectedProcedure.query(async ({ ctx }) => {
+    return checkBgRemovalQuota(ctx.user.id);
+  }),
+
+  /**
    * Check if AI service is available and properly configured
    * Useful for UI to show/hide AI features
    */
   checkAvailability: protectedProcedure.query(async () => {
     const hasApiKey = !!process.env.OPENAI_API_KEY;
+    const hasRemoveBgKey = !!process.env.REMOVE_BG_API_KEY;
 
     return {
       available: hasApiKey,
@@ -256,6 +424,7 @@ export const aiRouter = createTRPCRouter({
         listingGeneration: hasApiKey,
         imageAnalysis: hasApiKey,
         priceSuggestion: hasApiKey,
+        backgroundRemoval: hasRemoveBgKey,
       },
     };
   }),

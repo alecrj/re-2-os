@@ -8,6 +8,7 @@
  */
 
 import * as React from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -220,10 +221,13 @@ export function CrossListDialog({
                           rel="noopener noreferrer"
                           className="flex-shrink-0 h-16 w-16 rounded-md overflow-hidden border hover:border-primary transition-colors"
                         >
-                          <img
+                          <Image
                             src={url}
                             alt={`Photo ${index + 1}`}
                             className="h-full w-full object-cover"
+                            width={64}
+                            height={64}
+                            unoptimized
                           />
                         </a>
                       ))
